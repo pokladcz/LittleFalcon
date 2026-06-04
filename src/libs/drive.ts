@@ -272,8 +272,33 @@ export async function driveArc(
   angleState.angleZ = 0;
   const targetAbs = Math.abs(targetAngle);
 
+  // Výpočet rychlostí kol (konstantní rychlost po celou dobu oblouku)
+  let leftSpeed = 0;
+  let rightSpeed = 0;
+  const ratio = d / (2 * radiusMm);
+
+  if (targetAngle > 0) {
+    // Zatáčení vlevo
+    leftSpeed = baseSpeed * (1 - ratio);
+    rightSpeed = baseSpeed * (1 + ratio);
+  } else {
+    // Zatáčení vpravo
+    leftSpeed = baseSpeed * (1 + ratio);
+    rightSpeed = baseSpeed * (1 - ratio);
+  }
+
   console.log(`Start oblouku R=${radiusMm} mm, úhel=${targetAngle.toFixed(1)}° | Rychlost: ${baseSpeed} mm/s`);
   setAllLeds(CYAN);
+
+  // Nastavení rychlostí a nulových ramp pro okamžitý start
+  robutek.leftMotor.setSpeed(leftSpeed);
+  robutek.rightMotor.setSpeed(rightSpeed);
+  robutek.leftMotor.setRamp(0);
+  robutek.rightMotor.setRamp(0);
+
+  // Spuštění motorů bez udání dráhy (jednou na začátku, bez await, aby se neblokoval event loop)
+  robutek.leftMotor.move();
+  robutek.rightMotor.move();
 
   let lastLogTime = 0;
   const startTime = Date.now();
@@ -298,39 +323,6 @@ export async function driveArc(
       console.log(`Oblouk dokončen. Koncový úhel: ${angleState.angleZ.toFixed(1)} °`);
       break;
     }
-
-    // Konstantní rychlost bez jakýchkoliv brzdných ramp (požadavek: "bez ramp na nízkou rychlost")
-    const currentSpeed = baseSpeed;
-
-    // Výpočet rychlostí kol
-    // Kladný targetAngle = zatáčení vlevo (levé kolo pomalejší, pravé rychlejší)
-    // Záporný targetAngle = zatáčení vpravo (pravé kolo pomalejší, levé rychlejší)
-    let leftSpeed = 0;
-    let rightSpeed = 0;
-
-    const ratio = d / (2 * radiusMm);
-
-    if (targetAngle > 0) {
-      // Zatáčení vlevo
-      leftSpeed = currentSpeed * (1 - ratio);
-      rightSpeed = currentSpeed * (1 + ratio);
-    } else {
-      // Zatáčení vpravo
-      leftSpeed = currentSpeed * (1 + ratio);
-      rightSpeed = currentSpeed * (1 - ratio);
-    }
-
-    // Nastavení rychlostí na samostatných motorech
-    robutek.leftMotor.setSpeed(leftSpeed);
-    robutek.rightMotor.setSpeed(rightSpeed);
-
-    // Rampy nastaveny na 0 pro okamžité změny rychlosti (bez rampy)
-    robutek.leftMotor.setRamp(0);
-    robutek.rightMotor.setRamp(0);
-
-    // Spuštění pohybu bez udání vzdálenosti/času (voláme bez await, abychom neblokovali event loop!)
-    robutek.leftMotor.move();
-    robutek.rightMotor.move();
 
     // Logování každých 100 ms
     const now = Date.now();
