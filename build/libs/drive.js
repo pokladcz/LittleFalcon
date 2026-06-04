@@ -19,7 +19,7 @@ function sleep(ms) {
  * @param emergencyStopCallback Funkce pro vyvolání nouzového zastavení
  * @param isEmergencyLatched Funkce vracející stav nouzového zastavení
  */
-export async function driveStraight(robutek, gyro, gyroZOffset, distanceMm, speed, emergencyPin, angleState, leds, emergencyStopCallback, isEmergencyLatched) {
+export async function driveStraight(robutek, gyro, gyroZOffset, distanceMm, speed, emergencyPin, angleState, leds, emergencyStopCallback, isEmergencyLatched, shouldStopPredicate) {
     if (isEmergencyLatched())
         return;
     const GREEN = 0x003000;
@@ -46,6 +46,10 @@ export async function driveStraight(robutek, gyro, gyroZOffset, distanceMm, spee
     while (!isEmergencyLatched()) {
         if (isPressed(emergencyPin)) {
             await emergencyStopCallback();
+            break;
+        }
+        if (shouldStopPredicate && await shouldStopPredicate()) {
+            console.log("Jízda rovně přerušena externí podmínkou (senzor).");
             break;
         }
         // Spočítáme ujetou vzdálenost (průměr obou kol)

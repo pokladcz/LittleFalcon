@@ -32,7 +32,8 @@ export async function driveStraight(
   angleState: { angleZ: number },
   leds: any,
   emergencyStopCallback: () => Promise<void>,
-  isEmergencyLatched: () => boolean
+  isEmergencyLatched: () => boolean,
+  shouldStopPredicate?: () => Promise<boolean>
 ): Promise<void> {
   if (isEmergencyLatched()) return;
 
@@ -66,6 +67,11 @@ export async function driveStraight(
   while (!isEmergencyLatched()) {
     if (isPressed(emergencyPin)) {
       await emergencyStopCallback();
+      break;
+    }
+
+    if (shouldStopPredicate && await shouldStopPredicate()) {
+      console.log("Jízda rovně přerušena externí podmínkou (senzor).");
       break;
     }
 

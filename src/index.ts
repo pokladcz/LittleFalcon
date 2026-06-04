@@ -100,6 +100,8 @@ class MPU6050 {
 let gyro: MPU6050 | null = null;
 let gyroZOffset = 0;
 const angleState = { angleZ: 0 };
+let lidar: VL53L0X | null = null;       // Přední Lidar (na I2C2)
+let leftLidar: VL53L0X | null = null;   // Levý Lidar (na I2C1)
 let lastTime = 0;
 let intervalId: number | null = null;
 let emergencyLatched = false;
@@ -197,6 +199,22 @@ async function initHardware(): Promise<void> {
     console.log("OK: I2C2 sběrnice nastavena.");
   } catch (e) {
     console.log("CHYBA I2C2: " + e);
+  }
+
+  // Přední Lidar (na I2C2)
+  try {
+    lidar = new VL53L0X(I2C2);
+    console.log("OK: Přední Lidar VL53L0X (I2C2) připojen.");
+  } catch (e) {
+    console.log("CHYBA Přední Lidar (VL53L0X na I2C2): " + e);
+  }
+
+  // Levý Lidar (na I2C1)
+  try {
+    leftLidar = new VL53L0X(I2C1);
+    console.log("OK: Levý Lidar VL53L0X (I2C1) připojen.");
+  } catch (e) {
+    console.log("CHYBA Levý Lidar (VL53L0X na I2C1): " + e);
   }
 
   // Gyroskop MPU6050 (na I2C2)
@@ -320,59 +338,83 @@ async function waitForStart(): Promise<void> {
   }
 }
 
+async function getDistance(sensor: VL53L0X | null): Promise<number> {
+  if (sensor == null) return 9999;
+  try {
+    const m = await sensor.read();
+    if (m.distance <= 0 || m.distance > 2000) {
+      return 9999;
+    }
+    return m.distance;
+  } catch (e) {
+    return 9999;
+  }
+}
+
+// -------------------- AUTONOMNÍ POHYB JEDEM (Wall Follower) --------------------
+async function jedem(): Promise<void> {
+  const DIST_THRESHOLD = 200; // 20 cm = 200 mm
+  console.log("=== START POHYBU JEDEM (Wall Follower) ===");
+
+  while (!emergencyLatched) {
+    const left = await getDistance(leftLidar);
+    const front = await getDistance(lidar);
+
+    console.log(`[jedem] Leve: ${left.toFixed(0)} mm | Predni: ${front.toFixed(0)} mm`);
+
+    if (left > DIST_THRESHOLD) {
+      console.log("-> Vlevo volno: otáčím 90° doleva");
+      await rotateAngle(robutek, angleState, 90, SPEED_TURN, EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
+      if (emergencyLatched) return;
+      
+      console.log("-> Popojíždím 200 mm rovně z rohu...");
+      await driveStraight(
+        robutek,
+        gyro,
+        gyroZOffset,
+        200,
+        SPEED_NORMAL,
+        EMERGENCY_BUTTON_PIN,
+        angleState,
+        leds,
+        emergencyStop,
+        () => emergencyLatched
+      );
+    } else if (front > DIST_THRESHOLD) {
+      console.log("-> Vepředu volno (vlevo zeď): jedu rovně");
+      // Jedeme rovně, dokud se neuvolní levá strana nebo se nezablokuje předek
+      await driveStraight(
+        robutek,
+        gyro,
+        gyroZOffset,
+        5000, // Dlouhá jízda, kterou přerušíme senzory
+        SPEED_NORMAL,
+        EMERGENCY_BUTTON_PIN,
+        angleState,
+        leds,
+        emergencyStop,
+        () => emergencyLatched,
+        async () => {
+          const currLeft = await getDistance(leftLidar);
+          const currFront = await getDistance(lidar);
+          // Zastavíme, pokud je vlevo volno nebo je vepředu překážka
+          return (currLeft > DIST_THRESHOLD || currFront <= DIST_THRESHOLD);
+        }
+      );
+    } else {
+      console.log("-> Zablokováno (vlevo zeď, vepředu zeď): otáčím 90° doprava");
+      await rotateAngle(robutek, angleState, -90, SPEED_TURN, EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
+    }
+
+    await sleep(20);
+  }
+}
+
 // -------------------- TESTOVACÍ SEKVENCE POHYBŮ --------------------
 async function runSequence(): Promise<void> {
   setServoAngle(ANGLE_CENTER);
   await sleep(100);
-
-  // 1. Jízda rovně 1 metr
-  console.log("=== KROK 1: Jízda rovně 1 metr ===");
-  await driveStraight(
-    robutek,
-    gyro,
-    gyroZOffset,
-    1000, // 1000 mm = 1 metr
-    SPEED_NORMAL,
-    EMERGENCY_BUTTON_PIN,
-    angleState,
-    leds,
-    emergencyStop,
-    () => emergencyLatched
-  );
-
-  if (emergencyLatched) return;
-  await sleep(500); // Krátká pauza na zastavení před otočením
-
-  // 2. Otočení o 90 stupňů doprava (CW -> -90)
-  console.log("=== KROK 2: Otočení o 90° doprava ===");
-  await rotateAngle(
-    robutek,
-    angleState,
-    -90,
-    SPEED_TURN,
-    EMERGENCY_BUTTON_PIN,
-    leds,
-    emergencyStop,
-    () => emergencyLatched
-  );
-
-  if (emergencyLatched) return;
-  await sleep(500); // Krátká pauza na zastavení před otočením
-
-  // 3. Otočení o 180 stupňů doleva (CCW -> +180)
-  console.log("=== KROK 3: Otočení o 180° doleva ===");
-  await rotateAngle(
-    robutek,
-    angleState,
-    180,
-    SPEED_TURN,
-    EMERGENCY_BUTTON_PIN,
-    leds,
-    emergencyStop,
-    () => emergencyLatched
-  );
-
-  console.log("=== SEKVENCE DOKONČENA ===");
+  await jedem();
 }
 
 // -------------------- MAIN --------------------
