@@ -148,9 +148,19 @@ async function stopRobot(): Promise<void> {
 
 async function emergencyStop(): Promise<void> {
   emergencyLatched = true;
-  await stopRobot();
+  console.log("!!! NOUZOVÉ STOP TLAČÍTKO STISKNUTO - VYPNUTÍ POHYBU A RESET !!!");
+  
+  // Zastavíme veškerý pohyb
+  try {
+    await stopRobot();
+  } catch (e) {}
+
+  // Rozsvítíme červeně
   setAllLeds(RED);
-  console.log("NOUZOVE STOP - uvolni IO17 a zmackni IO2 pro novy start");
+  await sleep(500);
+
+  // Ukončíme program (reset)
+  exit(0);
 }
 
 function applySteering(speed: number, steer: number) {
@@ -246,6 +256,13 @@ async function initHardware(): Promise<void> {
   }
 
   setAllLeds(YELLOW); // Připraven ke startu
+
+  // Samostatný background task pro sledování nouzového tlačítka a okamžitý reset
+  setInterval(async () => {
+    if (isPressed(EMERGENCY_BUTTON_PIN)) {
+      await emergencyStop();
+    }
+  }, 10);
 }
 
 // -------------------- ČEKÁNÍ NA START --------------------

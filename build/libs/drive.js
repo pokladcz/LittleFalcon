@@ -78,6 +78,7 @@ export async function driveStraight(robutek, gyro, gyroZOffset, distanceMm, spee
             const derivative = (error - lastError) / dt;
             lastError = error;
             // Zpětnovazební PID regulace
+            // Kladná curve v DifferentialDrive.move(curve) zatáčí doprava (corrective pro kladný error/vychýlení doleva)
             const STEER_SIGN = 1;
             let curve = STEER_SIGN * (Kp * error + Ki * integral + Kd * derivative);
             // Limity korekce: max ±0.20
@@ -85,9 +86,8 @@ export async function driveStraight(robutek, gyro, gyroZOffset, distanceMm, spee
                 curve = 0.20;
             if (curve < -0.20)
                 curve = -0.20;
-            // CURVE_SIGN = -1
             robutek.setSpeed(speed);
-            robutek.move(-1 * curve);
+            await robutek.move(curve);
         }
         await sleep(10);
     }
@@ -131,36 +131,30 @@ export async function rotateAngle(robutek, angleState, targetAngleChange, speed,
     const targetAngle = targetAngleChange;
     console.log(`Start otáčení na místě o: ${targetAngle.toFixed(1)} °`);
     setAllLeds(BLUE);
+    robutek.setSpeed(speed);
     while (!isEmergencyLatched()) {
         if (isPressed(emergencyPin)) {
             await emergencyStopCallback();
             break;
         }
         const error = angleState.angleZ - targetAngle;
-        // Pokud je chyba velmi malá (méně než 1.0 stupně), otáčení končí
-        if (Math.abs(error) < 1.0) {
+        // Pokud je chyba velmi malá (méně než 1.5 stupně), otáčení končí
+        if (Math.abs(error) < 1.5) {
             console.log(`Otáčení úspěšně dokončeno. Koncový úhel: ${angleState.angleZ.toFixed(1)} °`);
             break;
         }
-        // P-regulátor rychlosti rotace
-        // Kp = 2.5 (pokud je chyba např. 10°, rotSpeed = 25 mm/s; při plné chybě je saturován na max. speed)
-        const Kp = 2.5;
-        let rotSpeed = -error * Kp;
-        // Omezení maximální rychlosti otáčení
-        if (rotSpeed > speed)
-            rotSpeed = speed;
-        if (rotSpeed < -speed)
-            rotSpeed = -speed;
-        // Pro otáčení na místě jedou motory v protisměru:
-        // rotSpeed > 0 (točíme doleva): levý motor jede vzad, pravý vpřed
-        // rotSpeed < 0 (točíme doprava): levý motor jede vpřed, pravý vzad
-        robutek.leftMotor.setSpeed(-rotSpeed);
-        robutek.rightMotor.setSpeed(rotSpeed);
-        // Vyvolání pohybu
-        await Promise.all([
-            robutek.leftMotor.move(),
-            robutek.rightMotor.move()
-        ]);
+        // P-regulátor zatáčení:
+        // Pokud je chyba velká (např. > 40 stupňů), točíme plnou rychlostí (curve = ±1.0)
+        // Před cílem plynule zpomalujeme.
+        const Kp = 0.025;
+        let curve = error * Kp;
+        // Omezení curve na rozsah [-1.0, 1.0]
+        if (curve > 1.0)
+            curve = 1.0;
+        if (curve < -1.0)
+            curve = -1.0;
+        // Voláme standardní neblokující move()
+        await robutek.move(curve);
         await sleep(10);
     }
     // Zastavení motorů
@@ -173,5 +167,5 @@ export async function rotateAngle(robutek, angleState, targetAngleChange, speed,
     }
     catch (e) { }
     setAllLeds(PURPLE); // Hotovo
-    await sleep(500); // Krátká pauza na uklidnění po otočení
+    await sleep(300); // Krátká pauza na uklidnění po otočení
 }
