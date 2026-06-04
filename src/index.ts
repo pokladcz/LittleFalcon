@@ -1,5 +1,5 @@
 import { createRobutek } from "./libs/robutek.js";
-import { I2C2 } from "i2c";
+import { I2C1, I2C2 } from "i2c";
 import { VL53L0X } from "./libs/VL53L0X.js";
 import { ZSCS2016C } from "./libs/zscs2016c.js";
 import { Servo } from "./libs/servo.js";
@@ -8,7 +8,8 @@ import * as gpio from "gpio";
 
 // ======================================================
 // TESTOVACÍ PROGRAM PRO SENSORY ROBOTA
-// - Čtení hodnot z Lidaru (VL53L0X) na servu (BEZ OTÁČENÍ SERVA!)
+// - Čtení hodnot z předního Lidaru (VL53L0X na I2C2) na servu (BEZ OTÁČENÍ SERVA!)
+// - Čtení hodnot z levého Lidaru (VL53L0X na I2C1)
 // - Čtení dolních infračervených senzorů čáry (LineFL, LineFR, LineBL, LineBR)
 // - Vyhledání a integrace gyroskopu (MPU6050) pro výpočet úhlu ve stupních
 // - Ovládání LED pásku (na startu čekání, po stisku IO2 blikání/indikace hodnot)
@@ -41,7 +42,8 @@ const WHITE = 0x202020;
 const leds = new SmartLed(LED_PIN, LED_COUNT, LED_WS2812B);
 const servo = new Servo(SERVO_PIN, 1, 4);
 
-let lidar: VL53L0X | null = null;
+let lidar: VL53L0X | null = null;       // Přední Lidar (na I2C2)
+let leftLidar: VL53L0X | null = null;   // Levý Lidar (na I2C1)
 let rgb: ZSCS2016C | null = null;
 
 // -------------------- GYROSKOP (MPU6050) OVLADAČ --------------------
@@ -148,6 +150,7 @@ async function initHardware(): Promise<void> {
   console.log("I2C2 SDA=" + I2C2_SDA + " SCL=" + I2C2_SCL);
   console.log("======================================");
 
+  // Nastavení I2C2 sběrnice
   try {
     I2C2.setup({
       sda: I2C2_SDA,
@@ -164,18 +167,37 @@ async function initHardware(): Promise<void> {
   for (let addr = 1; addr < 127; addr++) {
     try {
       I2C2.writeTo(addr, []);
-      console.log(` -> Nalezeno I2C zařízení na adrese 0x${addr.toString(16)} (${addr})`);
+      console.log(` -> Nalezeno I2C zařízení na I2C2 adrese 0x${addr.toString(16)} (${addr})`);
     } catch (e) {
       // Žádné zařízení neodpovědělo
     }
   }
 
-  // Lidar
+  // Scan I2C1 sběrnice pro diagnostiku
+  console.log("Skenuji I2C1 sběrnici...");
+  for (let addr = 1; addr < 127; addr++) {
+    try {
+      I2C1.writeTo(addr, []);
+      console.log(` -> Nalezeno I2C zařízení na I2C1 adrese 0x${addr.toString(16)} (${addr})`);
+    } catch (e) {
+      // Žádné zařízení neodpovědělo
+    }
+  }
+
+  // Přední Lidar (na I2C2)
   try {
     lidar = new VL53L0X(I2C2);
-    console.log("OK: Lidar VL53L0X připojen.");
+    console.log("OK: Přední Lidar VL53L0X (I2C2) připojen.");
   } catch (e) {
-    console.log("CHYBA Lidar (VL53L0X): " + e);
+    console.log("CHYBA Přední Lidar (VL53L0X na I2C2): " + e);
+  }
+
+  // Levý Lidar (na I2C1)
+  try {
+    leftLidar = new VL53L0X(I2C1);
+    console.log("OK: Levý Lidar VL53L0X (I2C1) připojen.");
+  } catch (e) {
+    console.log("CHYBA Levý Lidar (VL53L0X na I2C1): " + e);
   }
 
   // RGB senzor
@@ -187,7 +209,7 @@ async function initHardware(): Promise<void> {
     console.log("CHYBA RGB: " + e);
   }
 
-  // Gyroskop MPU6050
+  // Gyroskop MPU6050 (na I2C2)
   try {
     gyro = new MPU6050(I2C2);
     if (gyro.probe()) {
@@ -296,21 +318,35 @@ async function runTest(): Promise<void> {
 
     console.log("----------------------------------------");
 
-    // 1. Měření Lidaru (středová vzdálenost, bez otáčení serva)
-    let distStr = "N/A";
-    let distVal = 0;
+    // 1. Měření předního Lidaru (středová vzdálenost, bez otáčení serva)
+    let frontDistStr = "N/A";
+    let frontDistVal = 0;
     if (lidar != null) {
       try {
         const m = await lidar.read();
-        distVal = m.distance;
-        distStr = distVal + " mm";
+        frontDistVal = m.distance;
+        frontDistStr = frontDistVal + " mm";
       } catch (e) {
-        distStr = "Chyba (" + e + ")";
+        frontDistStr = "Chyba (" + e + ")";
       }
     }
-    console.log("Lidar (vzdálenost): " + distStr);
+    console.log("Predni senzor (Lidar): " + frontDistStr);
 
-    // 2. Měření spodních IR senzorů čáry
+    // 2. Měření levého Lidaru (na I2C1)
+    let leftDistStr = "N/A";
+    let leftDistVal = 0;
+    if (leftLidar != null) {
+      try {
+        const m = await leftLidar.read();
+        leftDistVal = m.distance;
+        leftDistStr = leftDistVal + " mm";
+      } catch (e) {
+        leftDistStr = "Chyba (" + e + ")";
+      }
+    }
+    console.log("Levy senzor (Lidar): " + leftDistStr);
+
+    // 3. Měření spodních IR senzorů čáry
     const lfl = robutek.readSensor('LineFL');
     const lfr = robutek.readSensor('LineFR');
     const lbl = robutek.readSensor('LineBL');
@@ -328,17 +364,17 @@ async function runTest(): Promise<void> {
       }
     }
 
-    // 3. Měření Gyroskopu (Pouze úhel ve stupních)
+    // 4. Měření Gyroskopu (Pouze úhel ve stupních)
     if (gyro != null) {
       console.log(`Gyroskop (Úhel): ${angleZ.toFixed(1)} °`);
     } else {
       console.log("Gyroskop: Nedostupný");
     }
 
-    // 4. Ovládání a animace LED pásku na základě hodnot
-    // Nastavíme barvu LED podle hodnot:
-    // LED 0, 1, 2, 3 odpovídají senzorům čáry (jas modré barvy podle analogové hodnoty)
-    // LED 4, 5, 6, 7 odpovídají vzdálenosti z lidaru
+    // 5. Ovládání a animace LED pásku na základě hodnot
+    // LED 0, 1, 2, 3 odpovídají senzorům čáry
+    // LED 4, 5 odpovídají přednímu dálkoměru (Predni senzor)
+    // LED 6, 7 odpovídají levému dálkoměru (Levy senzor)
     leds.clear();
     
     // Mapování čáry (modrá intenzita, max 60 ze 255 pro rozumný jas)
@@ -347,24 +383,34 @@ async function runTest(): Promise<void> {
     leds.set(2, Math.round((lbl / 4095) * 60));
     leds.set(3, Math.round((lbr / 4095) * 60));
 
-    // Mapování Lidaru na zbylé 4 LED
-    // Pokud je blízko (< 300mm) -> Červená
-    // Středně daleko (300-600mm) -> Žlutá
-    // Daleko (> 600mm) -> Zelená
-    let lidarColor = BLUE; // Výchozí modrá
-    if (distVal > 0) {
-      if (distVal < 300) {
-        lidarColor = RED;
-      } else if (distVal < 600) {
-        lidarColor = YELLOW;
+    // Mapování předního Lidaru na LED 4, 5
+    let frontLidarColor = BLUE;
+    if (frontDistVal > 0) {
+      if (frontDistVal < 300) {
+        frontLidarColor = RED;
+      } else if (frontDistVal < 600) {
+        frontLidarColor = YELLOW;
       } else {
-        lidarColor = GREEN;
+        frontLidarColor = GREEN;
       }
     }
-    
-    for (let i = 4; i < LED_COUNT; i++) {
-      leds.set(i, lidarColor);
+    leds.set(4, frontLidarColor);
+    leds.set(5, frontLidarColor);
+
+    // Mapování levého Lidaru na LED 6, 7
+    let leftLidarColor = BLUE;
+    if (leftDistVal > 0) {
+      if (leftDistVal < 300) {
+        leftLidarColor = RED;
+      } else if (leftDistVal < 600) {
+        leftLidarColor = YELLOW;
+      } else {
+        leftLidarColor = GREEN;
+      }
     }
+    leds.set(6, leftLidarColor);
+    leds.set(7, leftLidarColor);
+
     leds.show();
 
     await sleep(500); // Výpis každou půl sekundu
