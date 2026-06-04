@@ -4,6 +4,8 @@ import { VL53L0X } from "./libs/VL53L0X.js";
 import { Servo } from "./libs/servo.js";
 import { SmartLed, LED_WS2812B } from "smartled";
 import * as gpio from "gpio";
+import { driveStraight, rotateAngle } from "./libs/drive.js";
+
 
 // ======================================================
 // TEST JÍZDY ROVNĚ 1 METR POMOCÍ GYROSKOPU
@@ -97,13 +99,14 @@ class MPU6050 {
 
 let gyro: MPU6050 | null = null;
 let gyroZOffset = 0;
-let angleZ = 0;
+const angleState = { angleZ: 0 };
 let lastTime = 0;
 let intervalId: number | null = null;
 let emergencyLatched = false;
 
 // -------------------- PARAMETRY JÍZDY --------------------
 const SPEED_NORMAL = 270;
+const SPEED_TURN = 150;
 const RAMP = 350;
 
 // Pokud robot při zatáčení uhýbá na špatnou stranu, změň na +1.
@@ -204,7 +207,7 @@ async function initHardware(): Promise<void> {
       
       // Spuštění intervalu pro integraci úhlu
       lastTime = Date.now();
-      angleZ = 0;
+      angleState.angleZ = 0;
       if (intervalId !== null) {
         clearInterval(intervalId);
       }
@@ -225,7 +228,7 @@ async function initHardware(): Promise<void> {
             }
             
             if (dt > 0 && dt < 0.2) {
-              angleZ += gz_dps * dt;
+              angleState.angleZ += gz_dps * dt;
             }
           } catch (e) {
             // ignorovat
@@ -276,7 +279,7 @@ async function waitForStart(): Promise<void> {
       await sleep(200);
       if (isPressed(START_BUTTON_PIN)) {
         console.log("=== AUTONOMNI START ===");
-        angleZ = 0;
+        angleState.angleZ = 0;
         lastTime = Date.now();
         setAllLeds(YELLOW);
         await sleep(300);
@@ -287,93 +290,59 @@ async function waitForStart(): Promise<void> {
   }
 }
 
-// -------------------- JÍZDA ROVNĚ 1 METR --------------------
-async function driveStraight(): Promise<void> {
-  if (emergencyLatched) return;
-
-  await stopRobot();
+// -------------------- TESTOVACÍ SEKVENCE POHYBŮ --------------------
+async function runSequence(): Promise<void> {
   setServoAngle(ANGLE_CENTER);
   await sleep(100);
 
-  // Načteme počáteční pozice enkodérů
-  const startLeft = robutek.leftMotor.getPosition();
-  const startRight = robutek.rightMotor.getPosition();
-  
-  // RESETUJEME ÚHEL NA ZAČÁTKU JÍZDY
-  angleZ = 0;
-  const targetAngle = 0;
+  // 1. Jízda rovně 1 metr
+  console.log("=== KROK 1: Jízda rovně 1 metr ===");
+  await driveStraight(
+    robutek,
+    gyro,
+    gyroZOffset,
+    1000, // 1000 mm = 1 metr
+    SPEED_NORMAL,
+    EMERGENCY_BUTTON_PIN,
+    angleState,
+    leds,
+    emergencyStop,
+    () => emergencyLatched
+  );
 
-  // Inicializace PID proměnných
-  let integral = 0;
-  let lastError = 0;
-  let lastTimeMs = Date.now();
+  if (emergencyLatched) return;
+  await sleep(500); // Krátká pauza na zastavení před otočením
 
-  console.log(`Start jízdy rovně na 1 metr. Cílový úhel: ${targetAngle.toFixed(1)} °`);
-  setAllLeds(GREEN);
+  // 2. Otočení o 90 stupňů doprava (CW -> -90)
+  console.log("=== KROK 2: Otočení o 90° doprava ===");
+  await rotateAngle(
+    robutek,
+    angleState,
+    -90,
+    SPEED_TURN,
+    EMERGENCY_BUTTON_PIN,
+    leds,
+    emergencyStop,
+    () => emergencyLatched
+  );
 
-  while (!emergencyLatched) {
-    if (isPressed(EMERGENCY_BUTTON_PIN)) {
-      await emergencyStop();
-      break;
-    }
+  if (emergencyLatched) return;
+  await sleep(500); // Krátká pauza na zastavení před otočením
 
-    // Spočítáme ujetou vzdálenost (průměr obou kol)
-    const currentLeft = robutek.leftMotor.getPosition();
-    const currentRight = robutek.rightMotor.getPosition();
-    const distLeft = currentLeft - startLeft;
-    const distRight = currentRight - startRight;
-    const distTraveled = (distLeft + distRight) / 2; // v mm
+  // 3. Otočení o 180 stupňů doleva (CCW -> +180)
+  console.log("=== KROK 3: Otočení o 180° doleva ===");
+  await rotateAngle(
+    robutek,
+    angleState,
+    180,
+    SPEED_TURN,
+    EMERGENCY_BUTTON_PIN,
+    leds,
+    emergencyStop,
+    () => emergencyLatched
+  );
 
-    console.log(`Ujeto: ${distTraveled.toFixed(0)} mm | Úhel: ${angleZ.toFixed(1)} °`);
-
-    // Pokud ujedeme 1000 mm (1 metr), zastavíme
-    if (distTraveled >= 1000) {
-      console.log("Cílová vzdálenost 1m dosažena. Zastavuji robot.");
-      break;
-    }
-
-    // Výpočet dt
-    const now = Date.now();
-    const dt = (now - lastTimeMs) / 1000.0;
-    lastTimeMs = now;
-
-    if (dt > 0 && dt < 0.2) {
-      const error = angleZ - targetAngle; // Kladná = vychýlení doleva, záporná = vychýlení doprava
-      
-      // PID koeficienty pro jemné a stabilní doladění směru
-      const Kp = 0.02;
-      const Ki = 0.001;
-      const Kd = 0.005;
-
-      integral += error * dt;
-      if (integral > 5) integral = 5;
-      if (integral < -5) integral = -5;
-
-      const derivative = (error - lastError) / dt;
-      lastError = error;
-
-      // Zpětnovazební PID regulace
-      // Znaménko STEER_SIGN = 1 je matematicky správné pro zápornou zpětnou vazbu.
-      // Pokud se robot stočí doleva (error > 0), curve bude kladné, což v DifferentialDrive
-      // sníží rychlost pravého motoru a otočí robot doprava (zpět na směr).
-      const STEER_SIGN = 1; 
-      let curve = STEER_SIGN * (Kp * error + Ki * integral + Kd * derivative);
-
-      // Limity korekce: max ±0.20. Tím zajistíme, že obě kola pojedou stále kupředu 
-      // a nedojde k zastavení nebo protočení jednoho kola v opačném směru.
-      if (curve > 0.20) curve = 0.20;
-      if (curve < -0.20) curve = -0.20;
-
-      robutek.setSpeed(SPEED_NORMAL);
-      robutek.move(curve);
-    }
-
-    await sleep(10);
-  }
-
-  await stopRobot();
-  setAllLeds(PURPLE); // Hotovo
-  await sleep(1000);
+  console.log("=== SEKVENCE DOKONČENA ===");
 }
 
 // -------------------- MAIN --------------------
@@ -381,7 +350,7 @@ async function main(): Promise<void> {
   await initHardware();
   while (true) {
     await waitForStart();
-    await driveStraight();
+    await runSequence();
   }
 }
 
