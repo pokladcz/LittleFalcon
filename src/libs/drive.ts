@@ -292,13 +292,8 @@ export async function driveArc(
       break;
     }
 
-    // Zpomalovací rampa před koncem oblouku (posledních 30 stupňů)
-    let speedFactor = 1.0;
-    if (error < 30.0) {
-      speedFactor = error / 30.0;
-      if (speedFactor < 0.25) speedFactor = 0.25; // Minimální výkon, aby se motory nezasekly
-    }
-    const currentSpeed = baseSpeed * speedFactor;
+    // Konstantní rychlost bez jakýchkoliv brzdných ramp (požadavek: "bez ramp na nízkou rychlost")
+    const currentSpeed = baseSpeed;
 
     // Výpočet rychlostí kol
     // Kladný targetAngle = zatáčení vlevo (levé kolo pomalejší, pravé rychlejší)
@@ -322,9 +317,9 @@ export async function driveArc(
     robutek.leftMotor.setSpeed(leftSpeed);
     robutek.rightMotor.setSpeed(rightSpeed);
 
-    // Vysoké rampy pro okamžitou změnu rychlosti
-    robutek.leftMotor.setRamp(3000);
-    robutek.rightMotor.setRamp(3000);
+    // Rampy nastaveny na 0 pro okamžité změny rychlosti (bez rampy)
+    robutek.leftMotor.setRamp(0);
+    robutek.rightMotor.setRamp(0);
 
     // Spuštění pohybu bez udání vzdálenosti/času (kontrolováno přes gyroskop v této smyčce)
     await Promise.all([

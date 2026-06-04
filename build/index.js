@@ -221,8 +221,8 @@ async function initHardware() {
                         lastTime = now;
                         // Převod na stupně za sekundu (dps) s odečtením offsetu
                         let gz_dps = (data.gyro.z - gyroZOffset) / 131.0;
-                        // Mrtvá zóna
-                        if (Math.abs(gz_dps) < 0.85) {
+                        // Mrtvá zóna (snížená na 0.3 dps pro extrémní přesnost při pomalém otáčení)
+                        if (Math.abs(gz_dps) < 0.3) {
                             gz_dps = 0.0;
                         }
                         if (dt > 0 && dt < 0.2) {
@@ -355,19 +355,21 @@ async function runSequence() {
     // Zakomentováno sledování zdi pro testování radiusů
     // await jedem();
     // Testovací radiusy podle požadavku uživatele:
-    // 1. Zatáčka 90 stupňů vlevo (CCW) s poloměrem 10 cm (100 mm)
-    console.log("=== TEST OBLOUKU: 90° vlevo, poloměr 10 cm ===");
-    await driveArc(robutek, angleState, 100, // poloměr 100 mm = 10 cm
+    // 1. Zatáčka 90 stupňů vlevo (CCW) s poloměrem 6 cm (60 mm) při pomalé rychlosti 120 mm/s
+    console.log("=== TEST OBLOUKU: 90° vlevo, poloměr 6 cm, rychlost 120 mm/s ===");
+    await driveArc(robutek, angleState, 60, // poloměr 60 mm = 6 cm
     90, // 90 stupňů vlevo
-    SPEED_NORMAL, EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
+    120, // nízká rychlost 120 mm/s
+    EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
     if (emergencyLatched)
         return;
     await sleep(1000); // Pauza mezi oblouky
-    // 2. Zatáčka 90 stupňů vpravo (CW) s poloměrem 10 cm (100 mm)
-    console.log("=== TEST OBLOUKU: 90° vpravo, poloměr 10 cm ===");
-    await driveArc(robutek, angleState, 100, // poloměr 100 mm = 10 cm
+    // 2. Zatáčka 90 stupňů vpravo (CW) s poloměrem 6 cm (60 mm) při pomalé rychlosti 120 mm/s
+    console.log("=== TEST OBLOUKU: 90° vpravo, poloměr 6 cm, rychlost 120 mm/s ===");
+    await driveArc(robutek, angleState, 60, // poloměr 60 mm = 6 cm
     -90, // 90 stupňů vpravo
-    SPEED_NORMAL, EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
+    120, // nízká rychlost 120 mm/s
+    EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
 }
 // -------------------- MAIN --------------------
 async function main() {
