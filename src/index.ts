@@ -342,7 +342,8 @@ async function getDistance(sensor: VL53L0X | null): Promise<number> {
   if (sensor == null) return 9999;
   try {
     const m = await sensor.read();
-    if (m.distance <= 0 || m.distance > 2000) {
+    // Jakákoliv hodnota pod 30 mm (3 cm) je považována za chybu senzoru (error) a bere se jako prázdno (9999)
+    if (m.distance < 30 || m.distance > 2000) {
       return 9999;
     }
     return m.distance;

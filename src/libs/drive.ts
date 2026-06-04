@@ -125,16 +125,7 @@ export async function driveStraight(
     await sleep(10);
   }
 
-  // Zastavení motorů
-  try {
-    await robutek.stop(true);
-  } catch (e) {}
-  try {
-    robutek.setSpeed(0);
-  } catch (e) {}
-
-  setAllLeds(PURPLE); // Hotovo
-  await sleep(1000);
+  // Konec pohybu - bez zastavení a bez sleep pro plynulý přechod na další stav
 }
 
 /**
@@ -334,14 +325,5 @@ export async function driveArc(
     await sleep(10);
   }
 
-  // Zastavení motorů
-  try {
-    await robutek.stop(true);
-  } catch (e) {}
-  try {
-    robutek.setSpeed(0);
-  } catch (e) {}
-
-  setAllLeds(PURPLE);
-  await sleep(300);
+  // Konec pohybu - bez zastavení a bez sleep pro plynulý přechod na další stav
 }
