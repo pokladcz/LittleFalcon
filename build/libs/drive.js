@@ -251,11 +251,9 @@ export async function driveArc(robutek, angleState, radiusMm, targetAngle, baseS
         // Rampy nastaveny na 0 pro okamžité změny rychlosti (bez rampy)
         robutek.leftMotor.setRamp(0);
         robutek.rightMotor.setRamp(0);
-        // Spuštění pohybu bez udání vzdálenosti/času (kontrolováno přes gyroskop v této smyčce)
-        await Promise.all([
-            robutek.leftMotor.move(),
-            robutek.rightMotor.move()
-        ]);
+        // Spuštění pohybu bez udání vzdálenosti/času (voláme bez await, abychom neblokovali event loop!)
+        robutek.leftMotor.move();
+        robutek.rightMotor.move();
         // Logování každých 100 ms
         const now = Date.now();
         if (now - lastLogTime > 100) {
