@@ -419,14 +419,14 @@ async function runSequence(): Promise<void> {
   // await jedem();
 
   // Testovací radiusy podle požadavku uživatele:
-  // 1. Zatáčka 90 stupňů vlevo (CCW) s poloměrem 11 cm (110 mm) při rychlosti 180 mm/s (zvýšeno o 50 %)
-  console.log("=== TEST OBLOUKU: 90° vlevo, poloměr 11 cm, rychlost 180 mm/s ===");
+  // 1. Zatáčka 90 stupňů vlevo (CCW) s poloměrem 14 cm (140 mm) při rychlosti 216 mm/s (zvýšeno o 20 %)
+  console.log("=== TEST OBLOUKU: 90° vlevo, poloměr 14 cm, rychlost 216 mm/s ===");
   await driveArc(
     robutek,
     angleState,
-    110, // poloměr 110 mm = 11 cm
+    140, // poloměr 140 mm = 14 cm
     90,  // 90 stupňů vlevo
-    180, // rychlost 180 mm/s (zvýšeno o 50 %)
+    216, // rychlost 216 mm/s (zvýšeno o 20 %)
     EMERGENCY_BUTTON_PIN,
     leds,
     emergencyStop,
@@ -436,14 +436,14 @@ async function runSequence(): Promise<void> {
   if (emergencyLatched) return;
   await sleep(1000); // Pauza mezi oblouky
 
-  // 2. Zatáčka 90 stupňů vpravo (CW) s poloměrem 11 cm (110 mm) při rychlosti 180 mm/s (zvýšeno o 50 %)
-  console.log("=== TEST OBLOUKU: 90° vpravo, poloměr 11 cm, rychlost 180 mm/s ===");
+  // 2. Zatáčka 90 stupňů vpravo (CW) s poloměrem 14 cm (140 mm) při rychlosti 216 mm/s (zvýšeno o 20 %)
+  console.log("=== TEST OBLOUKU: 90° vpravo, poloměr 14 cm, rychlost 216 mm/s ===");
   await driveArc(
     robutek,
     angleState,
-    110,  // poloměr 110 mm = 11 cm
+    140,  // poloměr 140 mm = 14 cm
     -90,  // 90 stupňů vpravo
-    180,  // rychlost 180 mm/s (zvýšeno o 50 %)
+    216,  // rychlost 216 mm/s (zvýšeno o 20 %)
     EMERGENCY_BUTTON_PIN,
     leds,
     emergencyStop,
