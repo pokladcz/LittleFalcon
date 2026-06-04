@@ -40,6 +40,7 @@ export async function driveStraight(
   // Zastavíme předchozí pohyb a uvolníme motory pro nový start (předchází chybě Motor is already moving)
   try {
     await robutek.stop();
+    await sleep(50); // Krátká pauza na zprocesování stopu v systému (zabraňuje race condition)
   } catch (e) {}
 
   const GREEN = 0x003000;
@@ -253,6 +254,7 @@ export async function driveArc(
   // Zastavíme předchozí pohyb a uvolníme motory pro nový start (předchází chybě Motor is already moving)
   try {
     await robutek.stop();
+    await sleep(50); // Krátká pauza na zprocesování stopu v systému (zabraňuje race condition)
   } catch (e) {}
 
   const CYAN = 0x003030;
