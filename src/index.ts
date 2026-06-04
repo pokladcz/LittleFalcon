@@ -1,17 +1,16 @@
 import { createRobutek } from "./libs/robutek.js";
 import { I2C1, I2C2 } from "i2c";
 import { VL53L0X } from "./libs/VL53L0X.js";
-import { ZSCS2016C } from "./libs/zscs2016c.js";
 import { Servo } from "./libs/servo.js";
 import { SmartLed, LED_WS2812B } from "smartled";
 import * as gpio from "gpio";
 
 // ======================================================
-// AUTONOMNÍ PROGRAM ROBO CARTS 2026
-// - Sledování levé stěny (vnitřní dráha při jízdě proti směru hodinových ručiček)
-// - Detekce levých zatáček a zatáčení pomocí gyroskopu (MPU6050)
-// - Hlídání překážek / čelní stěny předním dálkoměrem pro vyhýbání se
-// - Počítání kol pomocí spodního RGB senzoru a cílové čáry
+// TEST JÍZDY ROVNĚ 1 METR POMOCÍ GYROSKOPU
+// - Robot po stisku tlačítka IO2 uzamkne aktuální směr
+// - Jede rovně přesně 1 metr (1000 mm) podle enkodérů kol
+// - Udržuje přímý směr regulací podle gyroskopu (MPU6050)
+// - Po ujetí 1 metru zabrzdí a rozsvítí fialovou barvu
 // ======================================================
 
 const robutek = createRobutek("V2");
@@ -40,10 +39,6 @@ const WHITE = 0x202020;
 const leds = new SmartLed(LED_PIN, LED_COUNT, LED_WS2812B);
 const servo = new Servo(SERVO_PIN, 1, 4);
 
-let lidar: VL53L0X | null = null;       // Přední Lidar (na I2C2)
-let leftLidar: VL53L0X | null = null;   // Levý Lidar (na I2C1)
-let rgb: ZSCS2016C | null = null;
-
 // -------------------- GYROSKOP (MPU6050) OVLADAČ --------------------
 class MPU6050 {
   private i2c: any;
@@ -54,7 +49,6 @@ class MPU6050 {
     this.ad = 0x68;
   }
 
-  // Zkusí najít gyroskop na adresách 0x68 nebo 0x69
   probe(): boolean {
     for (const addr of [0x68, 0x69]) {
       try {
@@ -71,11 +65,8 @@ class MPU6050 {
   }
 
   init() {
-    // Probudit gyroskop: zapsat 0x00 do registru PWR_MGMT_1 (0x6B)
     this.i2c.writeTo(this.ad, [0x6B, 0x00]);
-    // Nastavit low-pass filtr (DLPF) na 21 Hz: zapsat 0x04 do registru CONFIG (0x1A)
     this.i2c.writeTo(this.ad, [0x1A, 0x04]);
-    // Nastavit rozsah gyroskopu na ±250 °/s: zapsat 0x00 do registru GYRO_CONFIG (0x1B)
     this.i2c.writeTo(this.ad, [0x1B, 0x00]);
   }
 
@@ -107,32 +98,16 @@ class MPU6050 {
 let gyro: MPU6050 | null = null;
 let gyroZOffset = 0;
 let angleZ = 0;
-let gyroZ_dps = 0;
 let lastTime = 0;
 let intervalId: number | null = null;
 let emergencyLatched = false;
-let driveStartTime = 0;
-
 
 // -------------------- PARAMETRY JÍZDY --------------------
 const SPEED_NORMAL = 270;
-const SPEED_SLOW = 190;
-const SPEED_TURN = 150;
 const RAMP = 350;
 
-// Když robot zatáčí opačně, změň na +1.
+// Pokud robot při zatáčení uhýbá na špatnou stranu, změň na +1.
 const CURVE_SIGN = -1;
-
-// -------------------- CÍLOVÁ ČÁRA (RGB) --------------------
-const RGB_ENABLE = true;
-const BLACK_CLEAR_MAX = 180;
-const BLACK_RGB_SUM_MAX = 420;
-const LINE_DEBOUNCE_MS = 1200;
-let lapCount = 0;
-let lastLineTime = 0;
-
-// Zde nastav cílový počet kol pro automatické zastavení (0 = nevypínat sám)
-const TARGET_LAPS = 0; 
 
 // -------------------- POMOCNÉ FUNKCE --------------------
 function sleep(ms: number): Promise<void> {
@@ -161,7 +136,6 @@ async function stopRobot(): Promise<void> {
   } catch (e) {
     console.log("stop chyba: " + e);
   }
-
   try {
     robutek.setSpeed(0);
   } catch (e) {
@@ -176,67 +150,9 @@ async function emergencyStop(): Promise<void> {
   console.log("NOUZOVE STOP - uvolni IO17 a zmackni IO2 pro novy start");
 }
 
-async function sleepCheck(ms: number): Promise<boolean> {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    if (isPressed(EMERGENCY_BUTTON_PIN)) {
-      await emergencyStop();
-      return false;
-    }
-    await sleep(2);
-  }
-  return true;
-}
-
-// Pomocník pro řízení s jednotným znaménkem zatáčení
-// steer: kladné = doprava, záporné = doleva
 function applySteering(speed: number, steer: number) {
   robutek.setSpeed(speed);
   robutek.move(CURVE_SIGN * steer);
-}
-
-// -------------------- RGB ČTENÍ ČÁRY --------------------
-function readBlackLine(): boolean {
-  if (!rgb) return false;
-
-  try {
-    const clear = rgb.readRawClear();
-    const raw = rgb.readRawRGB();
-    const sum = raw[0] + raw[1] + raw[2];
-
-    return clear > 0 &&
-           clear < BLACK_CLEAR_MAX &&
-           sum > 0 &&
-           sum < BLACK_RGB_SUM_MAX;
-  } catch (e) {
-    return false;
-  }
-}
-
-async function checkFinishLine(): Promise<boolean> {
-  if (!readBlackLine()) {
-    return false;
-  }
-
-  const now = Date.now();
-  if (now - lastLineTime < LINE_DEBOUNCE_MS) {
-    return false;
-  }
-
-  lastLineTime = now;
-  lapCount++;
-
-  console.log("CÍLOVÁ ČÁRA DETEKOVÁNA! Kolo: " + lapCount);
-  setAllLeds(CYAN);
-
-  if (TARGET_LAPS > 0 && lapCount >= TARGET_LAPS) {
-    console.log("DOSAŽEN CÍLOVÝ POČET KOL (" + TARGET_LAPS + "). Zastavuji robot.");
-    await stopRobot();
-    setAllLeds(PURPLE);
-    return true;
-  }
-
-  return false;
 }
 
 // -------------------- INICIALIZACE HW --------------------
@@ -251,7 +167,7 @@ async function initHardware(): Promise<void> {
   setServoAngle(ANGLE_CENTER); // Nastavíme na střed a už s ním neotáčíme!
 
   console.log("======================================");
-  console.log("AUTONOMNÍ ROBO CARTS 2026 - INICIALIZACE");
+  console.log("TEST JÍZDY ROVNĚ 1 METR - INICIALIZACE");
   console.log("IO2 = START, IO17 = NOUZOVE STOP");
   console.log("======================================");
 
@@ -265,34 +181,6 @@ async function initHardware(): Promise<void> {
     console.log("OK: I2C2 sběrnice nastavena.");
   } catch (e) {
     console.log("CHYBA I2C2: " + e);
-  }
-
-  // Přední Lidar (na I2C2)
-  try {
-    lidar = new VL53L0X(I2C2);
-    console.log("OK: Přední Lidar VL53L0X (I2C2) připojen.");
-  } catch (e) {
-    console.log("CHYBA Přední Lidar (VL53L0X na I2C2): " + e);
-  }
-
-  // Levý Lidar (na I2C1)
-  try {
-    leftLidar = new VL53L0X(I2C1);
-    console.log("OK: Levý Lidar VL53L0X (I2C1) připojen.");
-  } catch (e) {
-    console.log("CHYBA Levý Lidar (VL53L0X na I2C1): " + e);
-  }
-
-  // RGB senzor
-  if (RGB_ENABLE) {
-    try {
-      rgb = new ZSCS2016C(I2C2, false);
-      rgb.enable();
-      console.log("OK: RGB ZSCS2016C připojen.");
-    } catch (e) {
-      rgb = null;
-      console.log("CHYBA RGB: " + e);
-    }
   }
 
   // Gyroskop MPU6050 (na I2C2)
@@ -331,15 +219,13 @@ async function initHardware(): Promise<void> {
             // Převod na stupně za sekundu (dps) s odečtením offsetu
             let gz_dps = (data.gyro.z - gyroZOffset) / 131.0;
             
-            // Mrtvá zóna proti driftu v klidu (cca 0.85 °/s)
+            // Mrtvá zóna
             if (Math.abs(gz_dps) < 0.85) {
               gz_dps = 0.0;
             }
             
-            gyroZ_dps = gz_dps; // Uložíme pro D-složku PD regulátoru
-            
             if (dt > 0 && dt < 0.2) {
-              angleZ += gyroZ_dps * dt;
+              angleZ += gz_dps * dt;
             }
           } catch (e) {
             // ignorovat
@@ -356,7 +242,7 @@ async function initHardware(): Promise<void> {
     console.log("CHYBA Gyroskop: " + e);
   }
 
-  setAllLeds(YELLOW); // Svítí žlutě, připraven ke startu
+  setAllLeds(YELLOW); // Připraven ke startu
 }
 
 // -------------------- ČEKÁNÍ NA START --------------------
@@ -390,8 +276,6 @@ async function waitForStart(): Promise<void> {
       await sleep(200);
       if (isPressed(START_BUTTON_PIN)) {
         console.log("=== AUTONOMNI START ===");
-        lapCount = 0;
-        lastLineTime = 0;
         angleZ = 0;
         lastTime = Date.now();
         setAllLeds(YELLOW);
@@ -403,37 +287,23 @@ async function waitForStart(): Promise<void> {
   }
 }
 
-// -------------------- HLAVNÍ AUTONOMNÍ JÍZDA --------------------
-async function drive(): Promise<void> {
+// -------------------- JÍZDA ROVNĚ 1 METR --------------------
+async function driveStraight(): Promise<void> {
   if (emergencyLatched) return;
 
   await stopRobot();
   setServoAngle(ANGLE_CENTER);
-  await sleepCheck(200);
+  await sleep(100);
 
-  driveStartTime = Date.now();
+  // Načteme počáteční pozice enkodérů
+  const startLeft = robutek.leftMotor.getPosition();
+  const startRight = robutek.rightMotor.getPosition();
+  
+  // Uzamkneme cílový směr (0 stupňů)
+  const targetAngle = angleZ;
+
+  console.log(`Start jízdy rovně na 1 metr. Cílový úhel: ${targetAngle.toFixed(1)} °`);
   setAllLeds(GREEN);
-
-  // 1. FÁZE: Výjezd ze startovního boxu
-  // Robot jede 200 ms rovně a udržuje původní směr podle gyroskopu.
-  const startTargetAngle = angleZ;
-  const departureStart = Date.now();
-  console.log("Výjezd ze startovního boxu...");
-  while (Date.now() - departureStart < 200) {
-    if (isPressed(EMERGENCY_BUTTON_PIN)) {
-      await emergencyStop();
-      return;
-    }
-    const gyroError = angleZ - startTargetAngle;
-    const steer = gyroError * 0.05; // P-regulace pro držení rovného směru
-    applySteering(SPEED_NORMAL, steer);
-    await sleep(5);
-  }
-
-  // 2. FÁZE: Autonomní smyčka řízení (State Machine)
-  let state = "FOLLOW"; // Výchozí stav: Sledování levé stěny
-  let leftTurnStartAngle = 0;
-  let lastPrint = 0;
 
   while (!emergencyLatched) {
     if (isPressed(EMERGENCY_BUTTON_PIN)) {
@@ -441,97 +311,32 @@ async function drive(): Promise<void> {
       break;
     }
 
-    // Přečteme dálkoměry
-    let frontDist = 1200;
-    if (lidar != null) {
-      try {
-        const m = await lidar.read();
-        frontDist = m.distance;
-      } catch (e) {}
-    }
+    // Spočítáme ujetou vzdálenost (průměr obou kol)
+    const currentLeft = robutek.leftMotor.getPosition();
+    const currentRight = robutek.rightMotor.getPosition();
+    const distLeft = currentLeft - startLeft;
+    const distRight = currentRight - startRight;
+    const distTraveled = (distLeft + distRight) / 2; // v mm
 
-    let leftDist = 1200;
-    if (leftLidar != null) {
-      try {
-        const m = await leftLidar.read();
-        leftDist = m.distance;
-      } catch (e) {}
-    }
+    console.log(`Ujeto: ${distTraveled.toFixed(0)} mm | Úhel: ${angleZ.toFixed(1)} °`);
 
-    // Kontrola cílové čáry
-    if (await checkFinishLine()) {
+    // Pokud ujedeme 1000 mm (1 metr), zastavíme
+    if (distTraveled >= 1000) {
+      console.log("Cílová vzdálenost 1m dosažena. Zastavuji robot.");
       break;
     }
 
-    // Rozhodování chování (State Machine)
-    if (state === "FOLLOW") {
-      // 1. Nouzové vyhnutí doprava, pokud je překážka vpředu moc blízko
-      if (frontDist < 350) {
-        state = "AVOID";
-        setAllLeds(RED);
-        console.log("STATE CHANGE: AVOID (Překážka vpředu: " + frontDist + " mm)");
-      }
-      // 2. Zatáčení doleva, pokud zmizí stěna po levé straně
-      else if (leftDist > 550) {
-        state = "LEFT_TURN";
-        leftTurnStartAngle = angleZ;
-        setAllLeds(CYAN);
-        console.log("STATE CHANGE: LEFT_TURN (Levá stěna zmizela: " + leftDist + " mm)");
-      }
-      // 3. Sledování levé stěny
-      else {
-        // PD-regulátor pro udržování stěny
-        // Kp reguluje vzdálenost (target = 220 mm), Kd tlumí otáčení pomocí gyroskopu (gyroZ_dps)
-        const distError = leftDist - 220;
-        const steer = distError * 0.003 - gyroZ_dps * 0.005;
+    // Regulace směru podle gyroskopu (P-regulátor)
+    const error = angleZ - targetAngle;
+    const steer = error * 0.05; // zisk regulátoru (lze upravit, např. 0.03 - 0.08)
+    applySteering(SPEED_NORMAL, steer);
 
-        applySteering(SPEED_NORMAL, steer);
-        setAllLeds(GREEN);
-      }
-    }
-    else if (state === "LEFT_TURN") {
-      // Zatáčíme plynule vlevo (steer = -0.7)
-      applySteering(SPEED_TURN, -0.7);
-
-      const turnAngle = Math.abs(angleZ - leftTurnStartAngle);
-
-      // Zatáčení končí, pokud se otočíme o více než 80° nebo pokud se přiblížíme k levé stěně
-      if (turnAngle > 80 || leftDist < 400) {
-        state = "FOLLOW";
-        setAllLeds(GREEN);
-        console.log("STATE CHANGE: FOLLOW (Zatáčka dokončena, úhel: " + turnAngle.toFixed(1) + "°)");
-      }
-    }
-    else if (state === "AVOID") {
-      // Zatáčíme ostře doprava (steer = 0.8)
-      applySteering(SPEED_TURN, 0.8);
-
-      // Vyhýbání končí, když je před námi volná cesta
-      if (frontDist > 550) {
-        state = "FOLLOW";
-        setAllLeds(GREEN);
-        console.log("STATE CHANGE: FOLLOW (Překážka objetá, volno: " + frontDist + " mm)");
-      }
-    }
-
-    // Diagnostický výpis
-    if (Date.now() - lastPrint > 250) {
-      lastPrint = Date.now();
-      console.log(
-        "AUTO_RUN" +
-        " | state=" + state +
-        " | L_Lidar=" + leftDist + " mm" +
-        " | F_Lidar=" + frontDist + " mm" +
-        " | Gyro_Angle=" + angleZ.toFixed(1) + " °" +
-        " | Gyro_Rate=" + gyroZ_dps.toFixed(1) + " °/s" +
-        " | lap=" + lapCount
-      );
-    }
-
-    await sleep(10); // Smyčka běží na 100 Hz
+    await sleep(10);
   }
 
   await stopRobot();
+  setAllLeds(PURPLE); // Hotovo
+  await sleep(1000);
 }
 
 // -------------------- MAIN --------------------
@@ -539,7 +344,7 @@ async function main(): Promise<void> {
   await initHardware();
   while (true) {
     await waitForStart();
-    await drive();
+    await driveStraight();
   }
 }
 
