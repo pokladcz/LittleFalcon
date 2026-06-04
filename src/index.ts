@@ -299,8 +299,14 @@ async function driveStraight(): Promise<void> {
   const startLeft = robutek.leftMotor.getPosition();
   const startRight = robutek.rightMotor.getPosition();
   
-  // Uzamkneme cílový směr (0 stupňů)
-  const targetAngle = angleZ;
+  // RESETUJEME ÚHEL NA ZAČÁTKU JÍZDY
+  angleZ = 0;
+  const targetAngle = 0;
+
+  // Inicializace PID proměnných
+  let integral = 0;
+  let lastError = 0;
+  let lastTimeMs = Date.now();
 
   console.log(`Start jízdy rovně na 1 metr. Cílový úhel: ${targetAngle.toFixed(1)} °`);
   setAllLeds(GREEN);
@@ -326,10 +332,41 @@ async function driveStraight(): Promise<void> {
       break;
     }
 
-    // Regulace směru podle gyroskopu (P-regulátor)
-    const error = angleZ - targetAngle;
-    const steer = error * 0.05; // zisk regulátoru (lze upravit, např. 0.03 - 0.08)
-    applySteering(SPEED_NORMAL, steer);
+    // Výpočet dt
+    const now = Date.now();
+    const dt = (now - lastTimeMs) / 1000.0;
+    lastTimeMs = now;
+
+    if (dt > 0 && dt < 0.2) {
+      const error = angleZ - targetAngle; // Kladná = vychýlení doleva, záporná = vychýlení doprava
+      
+      // PID koeficienty pro jemné a stabilní doladění směru
+      const Kp = 0.02;
+      const Ki = 0.001;
+      const Kd = 0.005;
+
+      integral += error * dt;
+      if (integral > 5) integral = 5;
+      if (integral < -5) integral = -5;
+
+      const derivative = (error - lastError) / dt;
+      lastError = error;
+
+      // Zpětnovazební PID regulace
+      // Znaménko STEER_SIGN = 1 je matematicky správné pro zápornou zpětnou vazbu.
+      // Pokud se robot stočí doleva (error > 0), curve bude kladné, což v DifferentialDrive
+      // sníží rychlost pravého motoru a otočí robot doprava (zpět na směr).
+      const STEER_SIGN = 1; 
+      let curve = STEER_SIGN * (Kp * error + Ki * integral + Kd * derivative);
+
+      // Limity korekce: max ±0.20. Tím zajistíme, že obě kola pojedou stále kupředu 
+      // a nedojde k zastavení nebo protočení jednoho kola v opačném směru.
+      if (curve > 0.20) curve = 0.20;
+      if (curve < -0.20) curve = -0.20;
+
+      robutek.setSpeed(SPEED_NORMAL);
+      robutek.move(curve);
+    }
 
     await sleep(10);
   }
