@@ -94,6 +94,8 @@ let intervalId = null;
 let emergencyLatched = false;
 let lastLeftArcTime = 0; // Timestamp posledního zatáčení vlevo
 let lastRightArcTime = 0; // Timestamp posledního zatáčení vpravo
+let latestFrontDistance = 9999; // Sdílená hodnota předního senzoru
+let latestLeftDistance = 9999; // Sdílená hodnota levého senzoru
 // -------------------- PARAMETRY JÍZDY --------------------
 const SPEED_NORMAL = 450; // Zrychleno na 450 mm/s pro rychlejší a plynulejší jízdu rovně
 const SPEED_TURN = 150;
@@ -337,18 +339,36 @@ function updateSensorLeds(front, left) {
     }
     leds.show();
 }
+// -------------------- KONTINUÁLNÍ ČTENÍ SENZORŮ NA POZADÍ --------------------
+async function startLidarLoop() {
+    console.log("=== START SENSOR LOOP (Kontinuální čtení na pozadí) ===");
+    while (!emergencyLatched) {
+        try {
+            // Čteme z obou I2C sběrnic paralelně
+            const [left, front] = await Promise.all([
+                getDistance(leftLidar),
+                getDistance(lidar)
+            ]);
+            latestLeftDistance = left;
+            latestFrontDistance = front;
+            // Aktualizujeme LED vizualizaci
+            updateSensorLeds(front, left);
+        }
+        catch (e) {
+            // Ignorujeme případné chyby pro zachování chodu smyčky
+        }
+        // Krátká prodleva pro uvolnění event loopu
+        await sleep(5);
+    }
+}
 // -------------------- AUTONOMNÍ POHYB JEDEM (Wall Follower) --------------------
 async function jedem() {
     const DIST_THRESHOLD = 300; // Zvýšeno z 200 na 300 mm (30 cm) pro včasnou detekci levého rohu
     console.log("=== START POHYBU JEDEM (Wall Follower) ===");
     while (!emergencyLatched) {
-        // Paralelní čtení z obou LiDARů pro maximální rychlost odezvy
-        const [left, front] = await Promise.all([
-            getDistance(leftLidar),
-            getDistance(lidar)
-        ]);
-        // Aktualizujeme LED stav na základě měření
-        updateSensorLeds(front, left);
+        // Okamžité synchronní čtení z pozadí (nulová prodleva)
+        const left = latestLeftDistance;
+        const front = latestFrontDistance;
         console.log(`[jedem] Leve: ${left.toFixed(0)} mm | Predni: ${front.toFixed(0)} mm`);
         // Výpočet podmínek zatáčení
         const canTurnLeft = (left > DIST_THRESHOLD) && (Date.now() - lastLeftArcTime > 5000);
@@ -365,11 +385,9 @@ async function jedem() {
             // Jedeme rovně, dokud se neuvolní levá strana (s ohledem na 5s limit) nebo se nezablokuje předek
             await driveStraight(robutek, gyro, gyroZOffset, 5000, // Dlouhá jízda, kterou přerušíme senzory
             SPEED_NORMAL, EMERGENCY_BUTTON_PIN, angleState, leds, emergencyStop, () => emergencyLatched, async () => {
-                const [currLeft, currFront] = await Promise.all([
-                    getDistance(leftLidar),
-                    getDistance(lidar)
-                ]);
-                updateSensorLeds(currFront, currLeft);
+                // Synchronní čtení z pozadí v predicate smyčce (vysoká rychlost)
+                const currLeft = latestLeftDistance;
+                const currFront = latestFrontDistance;
                 const stopForLeft = (currLeft > DIST_THRESHOLD) && (Date.now() - lastLeftArcTime > 5000);
                 const stopForFront = (currFront <= 400);
                 return (stopForLeft || stopForFront);
@@ -402,6 +420,7 @@ async function runSequence() {
 // -------------------- MAIN --------------------
 async function main() {
     await initHardware();
+    startLidarLoop(); // Spustíme čtení LiDARů na pozadí
     while (true) {
         await waitForStart();
         await runSequence();
