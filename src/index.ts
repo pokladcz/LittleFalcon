@@ -107,7 +107,7 @@ let intervalId: number | null = null;
 let emergencyLatched = false;
 
 // -------------------- PARAMETRY JÍZDY --------------------
-const SPEED_NORMAL = 700;
+const SPEED_NORMAL = 200; // Sníženo z 700 na 200 mm/s pro velmi pomalou a kontrolovanou jízdu rovně
 const SPEED_TURN = 150;
 const RAMP = 3000;
 
@@ -353,7 +353,7 @@ async function getDistance(sensor: VL53L0X | null): Promise<number> {
 
 // -------------------- AUTONOMNÍ POHYB JEDEM (Wall Follower) --------------------
 async function jedem(): Promise<void> {
-  const DIST_THRESHOLD = 200; // 20 cm = 200 mm
+  const DIST_THRESHOLD = 300; // Zvýšeno z 200 na 300 mm (30 cm) pro včasnou detekci levého rohu
   console.log("=== START POHYBU JEDEM (Wall Follower) ===");
 
   while (!emergencyLatched) {
@@ -363,11 +363,11 @@ async function jedem(): Promise<void> {
     console.log(`[jedem] Leve: ${left.toFixed(0)} mm | Predni: ${front.toFixed(0)} mm`);
 
     if (left > DIST_THRESHOLD) {
-      console.log("-> Vlevo volno: zatáčím plynulým obloukem 90° vlevo (R=140 mm)");
+      console.log("-> Vlevo volno: zatáčím plynulým obloukem 90° vlevo (R=120 mm)");
       await driveArc(
         robutek,
         angleState,
-        140, // poloměr 14 cm = 140 mm
+        120, // Zmenšeno ze 140 na 120 mm (12 cm)
         90,  // 90 stupňů vlevo
         216, // rychlost 216 mm/s
         EMERGENCY_BUTTON_PIN,
@@ -397,11 +397,11 @@ async function jedem(): Promise<void> {
         }
       );
     } else {
-      console.log("-> Zablokováno (vlevo zeď, vepředu zeď): zatáčím plynulým obloukem 90° vpravo (R=140 mm)");
+      console.log("-> Zablokováno (vlevo zeď, vepředu zeď): zatáčím plynulým obloukem 90° vpravo (R=120 mm)");
       await driveArc(
         robutek,
         angleState,
-        140,  // poloměr 14 cm = 140 mm
+        120,  // Zmenšeno ze 140 na 120 mm (12 cm)
         -90,  // 90 stupňů vpravo
         216,  // rychlost 216 mm/s
         EMERGENCY_BUTTON_PIN,
