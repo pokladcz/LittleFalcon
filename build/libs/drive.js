@@ -40,9 +40,8 @@ export async function driveStraight(robutek, gyro, gyroZOffset, distanceMm, spee
     // Načteme počáteční pozice enkodérů
     const startLeft = robutek.leftMotor.getPosition();
     const startRight = robutek.rightMotor.getPosition();
-    // Resetujeme úhel na začátku jízdy
-    angleState.angleZ = 0;
-    const targetAngle = 0;
+    // Stabilizujeme robot vůči nejbližšímu absolutnímu síťovému úhlu (grid 0, 90, -90, 180 atd.)
+    const targetAngle = Math.round(angleState.angleZ / 90) * 90;
     // Inicializace PID proměnných
     let integral = 0;
     let lastError = 0;
@@ -125,9 +124,9 @@ export async function rotateAngle(robutek, angleState, targetAngleChange, speed,
         }
         leds.show();
     };
-    // Reset úhlu před zahájením otáčení
-    angleState.angleZ = 0;
-    const targetAngle = targetAngleChange;
+    // Určení cílového úhlu v absolutních souřadnicích
+    const startAngle = angleState.angleZ;
+    const targetAngle = startAngle + targetAngleChange;
     console.log(`Start otáčení na místě o: ${targetAngle.toFixed(1)} °`);
     setAllLeds(BLUE);
     robutek.setSpeed(speed);
@@ -207,7 +206,9 @@ export async function driveArc(robutek, angleState, radiusMm, targetAngle, baseS
     const d = 83; // mm
     // Zapamatujeme si úhel na začátku oblouku pro kompenzaci odchylky
     const startAngle = angleState.angleZ;
-    const targetAbs = startAngle + targetAngle;
+    // Cílový úhel je vypočten vůči nejbližšímu síťovému úhlu (gridu) pro absolutní eliminaci odchylek
+    const currentGrid = Math.round(startAngle / 90) * 90;
+    const targetAbs = currentGrid + targetAngle;
     // Načtení počátečních pozic enkodérů
     const startLeft = robutek.leftMotor.getPosition();
     const startRight = robutek.rightMotor.getPosition();
