@@ -105,8 +105,8 @@ let intervalId: number | null = null;
 let emergencyLatched = false;
 
 // -------------------- PARAMETRY JÍZDY --------------------
-const SPEED_NORMAL = 270;
-const SPEED_TURN = 150;
+const SPEED_NORMAL = 440;
+const SPEED_TURN = 240;
 const RAMP = 350;
 
 // Pokud robot při zatáčení uhýbá na špatnou stranu, změň na +1.
@@ -159,8 +159,11 @@ async function emergencyStop(): Promise<void> {
   setAllLeds(RED);
   await sleep(500);
 
-  // Ukončíme program (reset)
-  exit(0);
+  // Ukončíme program s chybovým kódem (pro restart ze strany supervisora)
+  exit(1);
+
+  // Jako záloha vyvoláme unhandled exception k vynucení tvrdého restartu firmware
+  throw new Error("Emergency restart requested");
 }
 
 function applySteering(speed: number, steer: number) {
