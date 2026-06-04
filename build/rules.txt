@@ -1,0 +1,57 @@
+Robotický den 2026
+
+RoboCarts – Robokáry
+Úkolem robota v soutěži RoboCarts je projet co nejrychleji
+stanovený počet kol na závodní trati.
+1. Průběh soutěže
+Roboti společně vystartují na závodní trať a jejich úkolem je co nejrychleji projet stanovený počet kol. O bodech
+rozhoduje jejich vzájemné pořadí v cíli. Nejlepší roboti z kvalifikačních jízd se utkají ve finálových závodech. Běžné kolize
+se soupeři nebo mantinelem jsou povoleny, úmyslné poškozování trati nebo ostatních robotů je zakázáno.
+
+2. Robot
+Robot je plně autonomní (samostatný) a nesmí být nebezpečný nebo nadmíru obtěžující.
+Při závodě včetně startu není povoleno žádné spojení robota s externími zařízeními. Od okamžiku, kdy soutěžící připraví
+robota ke startu, se jej nikdo nesmí dotýkat ani jakkoli zasahovat do jeho činnosti, a to až do té doby, kdy to rozhodčí
+opět povolí. Na horní straně robota musí být nouzový vypínač, jehož stisknutím se vypnou všechny pohony robota. Tento
+vypínač musí být dostatečně velký a vůči robotovi dostatečně výrazný, aby byl snadno rozpoznatelný, dosažitelný a
+použitelný.
+Na horní straně robota musí být místo pro jeho označení (nálepka 5x5 cm).
+Maximální velikost robota je 20(d)x10(š)x10(v) cm.
+Kategorie Beginner: Robot je dálkově bezdrátově řízený. Protesty týkající se spojení, jeho kvality a výpadků se
+nepřijímají. Nejsou povoleny žádné technologie úmyslného rušení, i kdyby byly v souladu s platnými zákony a
+vyhláškami.
+Kategorie Advanced: Robot je autonomní (samostatný) a při závodě včetně startu není povoleno žádné jeho spojení
+s externími zařízeními. Od okamžiku, kdy soutěžící připraví robota ke startu, se jej kromě odstartování nikdo nesmí
+dotýkat ani jakkoli zasahovat do jeho činnosti, a to až do té doby, kdy to rozhodčí opět povolí.
+
+3. Hřiště
+Plocha hřiště je bílá. Hřiště je ohraničeno mantinelem a na jeho
+ploše jsou vnitřní zdi, které tvoří závodní trať. Mantinel i vnitřní zdi
+jsou alespoň cca 10 cm vysoké, robot je nesmí přejíždět. Vnitřní
+zdi jsou červené, vnější zelené. Cílová čára je černá, o šířce 1,52 cm.
+Hřiště může být postaveno z více částí, mezi nimiž mohou být
+drobné výškové rozdíly. Cílová čára může být například
+namalovaná, nebo nalepená (i z více kusů).
+
+4. Start a cíl
+Každý robot startuje z jemu přiděleného startovního boxu
+o rozměrech 22(d)x12(š) cm. Přidělení robotů do boxů určuje
+rozhodčí. Před startem soutěžící postupně umístí své roboty do
+boxů; na umístění a nastavení robota má každý max. 30 s. Od
+chvíle umístění robota již není povolen žádný zásah. Rozhodčí
+závod odstartuje otevřením přední stěny všech boxů zároveň tak,
+že přední stěna boxu bude otevřená na celou šířku a průjezd bude vysoký aspoň 12 cm. Pod a před startovním boxem
+může být podložka drobné tloušťky; po odstartování bude startovní box i s touto podložkou odstraněn. Jezdí se proti
+směru hodinových ručiček.
+Za úspěšné projetí cílem se považuje okamžik, kdy robot kompletně přejede cílovou čáru. Závod končí ve chvíli, kdy
+poslední robot po ujetí stanoveného počtu kol projel cílem, nebo po uplynutí časového limitu. Počet kol a časový limit
+bude stanoven před zahájením jednotlivých úrovní závodů. Doporučujeme, aby se robot po konci závodu automaticky
+vypnul (odchycení robota je na soutěžících). Body do hodnocení dostane každý robot, který ujede stanovený počet kol.
+Nepojízdní nebo jinak nefunkční roboti se z hřiště při závodu neodstraňují vyjma situace, kdy při odstraňování
+startovních boxů robot tuto oblast neopustil.
+
+verze 2026/1
+
+http://www.roboticday.org
+
+

@@ -66,6 +66,10 @@ class MPU6050 {
     init() {
         // Probudit gyroskop: zapsat 0x00 do registru PWR_MGMT_1 (0x6B)
         this.i2c.writeTo(this.ad, [0x6B, 0x00]);
+        // Nastavit low-pass filtr (DLPF) na 21 Hz: zapsat 0x04 do registru CONFIG (0x1A)
+        this.i2c.writeTo(this.ad, [0x1A, 0x04]);
+        // Nastavit rozsah gyroskopu na ±250 °/s: zapsat 0x00 do registru GYRO_CONFIG (0x1B)
+        this.i2c.writeTo(this.ad, [0x1B, 0x00]);
     }
     read() {
         // Přečte 14 bajtů dat od registru 0x3B (ACCEL_XOUT_H)
@@ -111,18 +115,12 @@ function setAllLeds(color) {
     }
     leds.show();
 }
-function servoValue(angle) {
-    return Math.round((angle / 180) * 1023);
-}
-function setServoAngle(angle) {
-    servo.write(servoValue(angle));
-}
 // -------------------- INICIALIZACE HW --------------------
 async function initHardware() {
     gpio.pinMode(START_BUTTON_PIN, gpio.PinMode.INPUT_PULLUP);
     gpio.pinMode(EMERGENCY_BUTTON_PIN, gpio.PinMode.INPUT_PULLUP);
     setAllLeds(WHITE);
-    setServoAngle(ANGLE_CENTER); // Nastavíme na střed a už s ním neotáčíme!
+    servo.write(Math.round((ANGLE_CENTER / 180) * 1023)); // Nastavíme na střed a už s ním neotáčíme!
     console.log("======================================");
     console.log("TEST SENSORŮ - INICIALIZACE");
     console.log("IO2 = START, IO17 = NOUZOVE STOP");
@@ -193,16 +191,16 @@ async function initHardware() {
         if (gyro.probe()) {
             gyro.init();
             console.log("OK: Gyroskop MPU6050 inicializován.");
-            // Kalibrace gyroskopu - 100 měření v klidu
+            // Kalibrace gyroskopu - 200 přesnějších měření v klidu
             console.log("KALIBRACE GYROSKOPU - NEHÝBEJTE S ROBOTEM...");
             setAllLeds(PURPLE); // Během kalibrace svítíme fialově
             let sum = 0;
-            for (let i = 0; i < 100; i++) {
+            for (let i = 0; i < 200; i++) {
                 const data = gyro.read();
                 sum += data.gyro.z;
-                await sleep(10);
+                await sleep(5);
             }
-            gyroZOffset = sum / 100;
+            gyroZOffset = sum / 200;
             console.log("KALIBRACE HOTOVA. Gyro Z Offset: " + gyroZOffset.toFixed(2));
             // Spuštění intervalu pro integraci úhlu
             lastTime = Date.now();
@@ -218,7 +216,12 @@ async function initHardware() {
                         const dt = (now - lastTime) / 1000.0;
                         lastTime = now;
                         // Převod na stupně za sekundu (dps) s odečtením offsetu
-                        const gyroZ_dps = (data.gyro.z - gyroZOffset) / 131.0;
+                        let gyroZ_dps = (data.gyro.z - gyroZOffset) / 131.0;
+                        // Prahová mrtvá zóna (deadband) po vzoru FOTONu (cca 0.85 °/s)
+                        // Tím se zabrání samovolnému načítání úhlu (driftu), když robot stojí
+                        if (Math.abs(gyroZ_dps) < 0.85) {
+                            gyroZ_dps = 0.0;
+                        }
                         // Integrace úhlu (pokud je časový krok rozumný)
                         if (dt > 0 && dt < 0.2) {
                             angleZ += gyroZ_dps * dt;
