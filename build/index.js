@@ -93,7 +93,7 @@ let lastTime = 0;
 let intervalId = null;
 let emergencyLatched = false;
 // -------------------- PARAMETRY JÍZDY --------------------
-const SPEED_NORMAL = 200; // Sníženo z 700 na 200 mm/s pro velmi pomalou a kontrolovanou jízdu rovně
+const SPEED_NORMAL = 450; // Zrychleno na 450 mm/s pro rychlejší a plynulejší jízdu rovně
 const SPEED_TURN = 150;
 const RAMP = 3000;
 // Pokud robot při zatáčení uhýbá na špatnou stranu, změň na +1.
@@ -346,9 +346,9 @@ async function jedem() {
         updateSensorLeds(front, left);
         console.log(`[jedem] Leve: ${left.toFixed(0)} mm | Predni: ${front.toFixed(0)} mm`);
         if (left > DIST_THRESHOLD) {
-            console.log("-> Vlevo volno: zatáčím plynulým obloukem 90° vlevo (R=120 mm)");
+            console.log("-> Vlevo volno: zatáčím plynulým obloukem 180° vlevo (R=120 mm)");
             await driveArc(robutek, angleState, 120, // Zmenšeno ze 140 na 120 mm (12 cm)
-            90, // 90 stupňů vlevo
+            180, // Změněno z 90 na 180 stupňů vlevo podle požadavku
             216, // rychlost 216 mm/s
             EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
         }

@@ -104,10 +104,10 @@ export async function driveStraight(
     if (dt > 0 && dt < 0.2) {
       const error = angleState.angleZ - targetAngle; // Kladná = vychýlení doleva, záporná = vychýlení doprava
       
-      // Osvědčené PID koeficienty
-      const Kp = 0.02;
-      const Ki = 0.001;
-      const Kd = 0.005;
+      // Snížené PID koeficienty pro jemnější korekce podle přání uživatele
+      const Kp = 0.008;
+      const Ki = 0.0002;
+      const Kd = 0.0015;
 
       integral += error * dt;
       if (integral > 5) integral = 5;
@@ -120,9 +120,9 @@ export async function driveStraight(
       const STEER_SIGN = 1; 
       let curve = STEER_SIGN * (Kp * error + Ki * integral + Kd * derivative);
 
-      // Limity korekce: max ±0.20
-      if (curve > 0.20) curve = 0.20;
-      if (curve < -0.20) curve = -0.20;
+      // Snížené limity korekce na max ±0.06 pro velmi plynulé a neznatelné úpravy směru
+      if (curve > 0.06) curve = 0.06;
+      if (curve < -0.06) curve = -0.06;
 
       robutek.setSpeed(speed);
       robutek.move(curve); // Voláme bez await, abychom neblokovali event loop!
@@ -271,9 +271,10 @@ export async function driveArc(
   // Rozchod kol robota (track width) zadefinovaný výrobcem
   const d = 83; // mm
 
-  // Reset úhlu na začátku oblouku
-  angleState.angleZ = 0;
-  const targetAbs = Math.abs(targetAngle);
+  // Zapamatujeme si úhel na začátku oblouku pro kompenzaci odchylky
+  const startAngle = angleState.angleZ;
+  const targetAbs = startAngle + targetAngle;
+  const LEAD_ANGLE = 7.0; // Předstih v stupních kvůli setrvačnosti při 216 mm/s
 
   // Výpočet rychlostí kol (konstantní rychlost po celou dobu oblouku)
   let leftSpeed = 0;
@@ -290,7 +291,7 @@ export async function driveArc(
     rightSpeed = baseSpeed * (1 - ratio);
   }
 
-  console.log(`Start oblouku R=${radiusMm} mm, úhel=${targetAngle.toFixed(1)}° | Rychlost: ${baseSpeed} mm/s`);
+  console.log(`Start oblouku R=${radiusMm} mm, startovní úhel=${startAngle.toFixed(1)}°, cílový úhel=${targetAbs.toFixed(1)}° | Rychlost: ${baseSpeed} mm/s`);
   setAllLeds(CYAN);
 
   // Nastavení rychlostí a nulových ramp pro okamžitý start
@@ -318,12 +319,20 @@ export async function driveArc(
       break;
     }
 
-    const currentAngle = Math.abs(angleState.angleZ);
-    const error = targetAbs - currentAngle;
+    const currentAngle = angleState.angleZ;
 
-    // Pokud jsme dosáhli cílového úhlu s tolerancí 1.0 stupně, zastavíme
-    if (error <= 1.0) {
-      console.log(`Oblouk dokončen. Koncový úhel: ${angleState.angleZ.toFixed(1)} °`);
+    // Podmínka zastavení se započteným předstihem (lead angle) pro kompenzaci setrvačnosti
+    let finished = false;
+    if (targetAngle > 0) {
+      // Zatáčení vlevo (úhel roste)
+      finished = (currentAngle >= targetAbs - LEAD_ANGLE);
+    } else {
+      // Zatáčení vpravo (úhel klesá)
+      finished = (currentAngle <= targetAbs + LEAD_ANGLE);
+    }
+
+    if (finished) {
+      console.log(`Oblouk dokončen. Koncový úhel: ${currentAngle.toFixed(1)} ° (cíl ${targetAbs.toFixed(1)}°)`);
       break;
     }
 
@@ -331,7 +340,7 @@ export async function driveArc(
     const now = Date.now();
     if (now - lastLogTime > 100) {
       lastLogTime = now;
-      console.log(`Oblouk: úhel ${angleState.angleZ.toFixed(1)}° / cíl ${targetAngle.toFixed(1)}° | L: ${leftSpeed.toFixed(0)} mm/s, R: ${rightSpeed.toFixed(0)} mm/s`);
+      console.log(`Oblouk: úhel ${currentAngle.toFixed(1)}° / cíl ${targetAbs.toFixed(1)}° | L: ${leftSpeed.toFixed(0)} mm/s, R: ${rightSpeed.toFixed(0)} mm/s`);
     }
 
     await sleep(10);
