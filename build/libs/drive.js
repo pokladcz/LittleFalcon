@@ -24,7 +24,7 @@ export async function driveStraight(robutek, gyro, gyroZOffset, distanceMm, spee
         return;
     // Zastavíme předchozí pohyb a uvolníme motory pro nový start (předchází chybě Motor is already moving)
     try {
-        await robutek.stop();
+        await robutek.stop(true); // Aktivní brzdění pro rychlou deakceleraci
         await sleep(50); // Krátká pauza na zprocesování stopu v systému (zabraňuje race condition)
     }
     catch (e) { }
@@ -190,7 +190,7 @@ export async function driveArc(robutek, angleState, radiusMm, targetAngle, baseS
         return;
     // Zastavíme předchozí pohyb a uvolníme motory pro nový start (předchází chybě Motor is already moving)
     try {
-        await robutek.stop();
+        await robutek.stop(true); // Aktivní brzdění pro rychlou deakceleraci
         await sleep(50); // Krátká pauza na zprocesování stopu v systému (zabraňuje race condition)
     }
     catch (e) { }

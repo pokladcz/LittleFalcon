@@ -92,6 +92,8 @@ let leftLidar = null; // Levý Lidar (na I2C1)
 let lastTime = 0;
 let intervalId = null;
 let emergencyLatched = false;
+let lastLeftArcTime = 0; // Timestamp posledního zatáčení vlevo
+let lastRightArcTime = 0; // Timestamp posledního zatáčení vpravo
 // -------------------- PARAMETRY JÍZDY --------------------
 const SPEED_NORMAL = 450; // Zrychleno na 450 mm/s pro rychlejší a plynulejší jízdu rovně
 const SPEED_TURN = 150;
@@ -340,36 +342,53 @@ async function jedem() {
     const DIST_THRESHOLD = 300; // Zvýšeno z 200 na 300 mm (30 cm) pro včasnou detekci levého rohu
     console.log("=== START POHYBU JEDEM (Wall Follower) ===");
     while (!emergencyLatched) {
-        const left = await getDistance(leftLidar);
-        const front = await getDistance(lidar);
+        // Paralelní čtení z obou LiDARů pro maximální rychlost odezvy
+        const [left, front] = await Promise.all([
+            getDistance(leftLidar),
+            getDistance(lidar)
+        ]);
         // Aktualizujeme LED stav na základě měření
         updateSensorLeds(front, left);
         console.log(`[jedem] Leve: ${left.toFixed(0)} mm | Predni: ${front.toFixed(0)} mm`);
-        if (left > DIST_THRESHOLD) {
+        // Výpočet podmínek zatáčení
+        const canTurnLeft = (left > DIST_THRESHOLD) && (Date.now() - lastLeftArcTime > 5000);
+        if (canTurnLeft) {
             console.log("-> Vlevo volno: zatáčím plynulým obloukem 180° vlevo (R=120 mm)");
-            await driveArc(robutek, angleState, 120, // Zmenšeno ze 140 na 120 mm (12 cm)
-            180, // Změněno z 90 na 180 stupňů vlevo podle požadavku
+            lastLeftArcTime = Date.now();
+            await driveArc(robutek, angleState, 120, // poloměr 12 cm
+            180, // 180 stupňů vlevo
             216, // rychlost 216 mm/s
             EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
         }
         else if (front > DIST_THRESHOLD) {
             console.log("-> Vepředu volno (vlevo zeď): jedu rovně");
-            // Jedeme rovně, dokud se neuvolní levá strana nebo se nezablokuje předek
+            // Jedeme rovně, dokud se neuvolní levá strana (s ohledem na 5s limit) nebo se nezablokuje předek
             await driveStraight(robutek, gyro, gyroZOffset, 5000, // Dlouhá jízda, kterou přerušíme senzory
             SPEED_NORMAL, EMERGENCY_BUTTON_PIN, angleState, leds, emergencyStop, () => emergencyLatched, async () => {
-                const currLeft = await getDistance(leftLidar);
-                const currFront = await getDistance(lidar);
+                const [currLeft, currFront] = await Promise.all([
+                    getDistance(leftLidar),
+                    getDistance(lidar)
+                ]);
                 updateSensorLeds(currFront, currLeft);
-                // Zastavíme, pokud je vlevo volno nebo je vepředu překážka
-                return (currLeft > DIST_THRESHOLD || currFront <= DIST_THRESHOLD);
+                const stopForLeft = (currLeft > DIST_THRESHOLD) && (Date.now() - lastLeftArcTime > 5000);
+                const stopForFront = (currFront <= DIST_THRESHOLD);
+                return (stopForLeft || stopForFront);
             });
         }
         else {
-            console.log("-> Zablokováno (vlevo zeď, vepředu zeď): zatáčím plynulým obloukem 90° vpravo (R=120 mm)");
-            await driveArc(robutek, angleState, 120, // Zmenšeno ze 140 na 120 mm (12 cm)
-            -90, // 90 stupňů vpravo
-            216, // rychlost 216 mm/s
-            EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
+            // Zablokováno vepředu i vlevo: zkusíme zabočit vpravo, pokud od minulého pravého oblouku uběhlo více než 5 sekund
+            if (Date.now() - lastRightArcTime > 5000) {
+                console.log("-> Zablokováno (vlevo zeď, vepředu zeď): zatáčím plynulým obloukem 90° vpravo (R=120 mm)");
+                lastRightArcTime = Date.now();
+                await driveArc(robutek, angleState, 120, // poloměr 12 cm
+                -90, // 90 stupňů vpravo
+                216, // rychlost 216 mm/s
+                EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
+            }
+            else {
+                console.log("-> Zablokováno, ale pravé zatáčení je blokováno 5s limitem. Čekám...");
+                await sleep(50);
+            }
         }
         await sleep(20);
     }
