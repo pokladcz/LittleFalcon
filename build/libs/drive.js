@@ -78,7 +78,6 @@ export async function driveStraight(robutek, gyro, gyroZOffset, distanceMm, spee
             const derivative = (error - lastError) / dt;
             lastError = error;
             // Zpětnovazební PID regulace
-            // Kladná curve v DifferentialDrive.move(curve) zatáčí doprava (corrective pro kladný error/vychýlení doleva)
             const STEER_SIGN = 1;
             let curve = STEER_SIGN * (Kp * error + Ki * integral + Kd * derivative);
             // Limity korekce: max ±0.20
@@ -87,7 +86,7 @@ export async function driveStraight(robutek, gyro, gyroZOffset, distanceMm, spee
             if (curve < -0.20)
                 curve = -0.20;
             robutek.setSpeed(speed);
-            await robutek.move(curve);
+            robutek.move(curve); // Voláme bez await, abychom neblokovali event loop!
         }
         await sleep(10);
     }
@@ -132,20 +131,14 @@ export async function rotateAngle(robutek, angleState, targetAngleChange, speed,
     console.log(`Start otáčení na místě o: ${targetAngle.toFixed(1)} °`);
     setAllLeds(BLUE);
     robutek.setSpeed(speed);
+    let lastLogTime = 0;
     while (!isEmergencyLatched()) {
         if (isPressed(emergencyPin)) {
             await emergencyStopCallback();
             break;
         }
         const error = angleState.angleZ - targetAngle;
-        // Pokud je chyba velmi malá (méně než 1.5 stupně), otáčení končí
-        if (Math.abs(error) < 1.5) {
-            console.log(`Otáčení úspěšně dokončeno. Koncový úhel: ${angleState.angleZ.toFixed(1)} °`);
-            break;
-        }
-        // P-regulátor zatáčení:
-        // Pokud je chyba velká (např. > 40 stupňů), točíme plnou rychlostí (curve = ±1.0)
-        // Před cílem plynule zpomalujeme.
+        // P-regulátor zatáčení
         const Kp = 0.025;
         let curve = error * Kp;
         // Omezení curve na rozsah [-1.0, 1.0]
@@ -153,8 +146,19 @@ export async function rotateAngle(robutek, angleState, targetAngleChange, speed,
             curve = 1.0;
         if (curve < -1.0)
             curve = -1.0;
-        // Voláme standardní neblokující move()
-        await robutek.move(curve);
+        // Logování průběhu otáčení každých 100 ms
+        const nowLog = Date.now();
+        if (nowLog - lastLogTime > 100) {
+            lastLogTime = nowLog;
+            console.log(`Otáčení: úhel ${angleState.angleZ.toFixed(1)}° / cíl ${targetAngle.toFixed(1)}° | Chyba: ${error.toFixed(1)}° | Výkon: ${curve.toFixed(2)}`);
+        }
+        // Pokud je chyba velmi malá (méně než 1.5 stupně), otáčení končí
+        if (Math.abs(error) < 1.5) {
+            console.log(`Otáčení úspěšně dokončeno. Koncový úhel: ${angleState.angleZ.toFixed(1)} °`);
+            break;
+        }
+        // Voláme neblokující move() bez await
+        robutek.move(curve);
         await sleep(10);
     }
     // Zastavení motorů

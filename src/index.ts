@@ -263,6 +263,16 @@ async function initHardware(): Promise<void> {
       await emergencyStop();
     }
   }, 10);
+
+  // Hardware interrupt na spádovou hranu (tlačítko stisknuto) pro okamžitou odezvu bez čekání
+  try {
+    gpio.on("falling", EMERGENCY_BUTTON_PIN, () => {
+      emergencyStop();
+    });
+    console.log("OK: Hardware interrupt pro IO17 aktivován.");
+  } catch (e) {
+    console.log("CHYBA při registraci HW interruptu: " + e);
+  }
 }
 
 // -------------------- ČEKÁNÍ NA START --------------------
