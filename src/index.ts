@@ -10,7 +10,7 @@ import * as gpio from "gpio";
 // TESTOVACÍ PROGRAM PRO SENSORY ROBOTA
 // - Čtení hodnot z Lidaru (VL53L0X) na servu (BEZ OTÁČENÍ SERVA!)
 // - Čtení dolních infračervených senzorů čáry (LineFL, LineFR, LineBL, LineBR)
-// - Vyhledání a čtení gyroskopu (MPU6050)
+// - Vyhledání a integrace gyroskopu (MPU6050) pro výpočet úhlu ve stupních
 // - Ovládání LED pásku (na startu čekání, po stisku IO2 blikání/indikace hodnot)
 // ======================================================
 
@@ -103,6 +103,10 @@ class MPU6050 {
 }
 
 let gyro: MPU6050 | null = null;
+let gyroZOffset = 0;
+let angleZ = 0;
+let lastTime = 0;
+let intervalId: number | null = null;
 let emergencyLatched = false;
 
 // -------------------- POMOCNÉ FUNKCE --------------------
@@ -189,6 +193,46 @@ async function initHardware(): Promise<void> {
     if (gyro.probe()) {
       gyro.init();
       console.log("OK: Gyroskop MPU6050 inicializován.");
+      
+      // Kalibrace gyroskopu - 100 měření v klidu
+      console.log("KALIBRACE GYROSKOPU - NEHÝBEJTE S ROBOTEM...");
+      setAllLeds(PURPLE); // Během kalibrace svítíme fialově
+      let sum = 0;
+      for (let i = 0; i < 100; i++) {
+        const data = gyro.read();
+        sum += data.gyro.z;
+        await sleep(10);
+      }
+      gyroZOffset = sum / 100;
+      console.log("KALIBRACE HOTOVA. Gyro Z Offset: " + gyroZOffset.toFixed(2));
+      
+      // Spuštění intervalu pro integraci úhlu
+      lastTime = Date.now();
+      angleZ = 0;
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+      }
+      intervalId = setInterval(() => {
+        if (gyro) {
+          try {
+            const data = gyro.read();
+            const now = Date.now();
+            const dt = (now - lastTime) / 1000.0;
+            lastTime = now;
+            
+            // Převod na stupně za sekundu (dps) s odečtením offsetu
+            const gyroZ_dps = (data.gyro.z - gyroZOffset) / 131.0;
+            
+            // Integrace úhlu (pokud je časový krok rozumný)
+            if (dt > 0 && dt < 0.2) {
+              angleZ += gyroZ_dps * dt;
+            }
+          } catch (e) {
+            // ignorovat případné chyby čtení na sběrnici
+          }
+        }
+      }, 10); // Čtení každých 10 ms pro vysokou vzorkovací frekvenci a přesnost
+      
     } else {
       gyro = null;
       console.log("CHYBA: Gyroskop MPU6050 nebyl nalezen na I2C2.");
@@ -198,7 +242,7 @@ async function initHardware(): Promise<void> {
     console.log("CHYBA Gyroskop: " + e);
   }
 
-  setAllLeds(YELLOW); // Po úspěšném bootu svítí žlutě a čeká na start
+  setAllLeds(YELLOW); // Po úspěšném bootu a kalibraci svítí žlutě a čeká na start
 }
 
 // -------------------- ČEKÁNÍ NA START --------------------
@@ -229,6 +273,8 @@ async function waitForStart(): Promise<void> {
       await sleep(200);
       if (isPressed(START_BUTTON_PIN)) {
         console.log("=== START TESTU ===");
+        angleZ = 0; // Vynulování úhlu při každém novém startu testu!
+        lastTime = Date.now();
         setAllLeds(BLUE); // Při startu se rozsvítí modrá!
         await sleep(300);
         return;
@@ -282,16 +328,9 @@ async function runTest(): Promise<void> {
       }
     }
 
-    // 3. Měření Gyroskopu
+    // 3. Měření Gyroskopu (Pouze úhel ve stupních)
     if (gyro != null) {
-      try {
-        const g = gyro.read();
-        console.log(`MPU6050 Gyro: X=${g.gyro.x} | Y=${g.gyro.y} | Z=${g.gyro.z}`);
-        console.log(`MPU6050 Accel: X=${g.accel.x} | Y=${g.accel.y} | Z=${g.accel.z}`);
-        console.log(`MPU6050 Temp: ${g.temp.toFixed(1)} °C`);
-      } catch (e) {
-        console.log("MPU6050 Chyba: " + e);
-      }
+      console.log(`Gyroskop (Úhel): ${angleZ.toFixed(1)} °`);
     } else {
       console.log("Gyroskop: Nedostupný");
     }
