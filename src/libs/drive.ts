@@ -41,8 +41,8 @@ export async function driveStraight(
   const PURPLE = 0x300030;
   
   const setAllLeds = (color: number) => {
-    leds.clear();
-    for (let i = 0; i < 8; i++) {
+    // Nastavujeme pouze LED 2 až 7 (LED 0 a 1 jsou vyhrazeny pro sensory)
+    for (let i = 2; i < 8; i++) {
       leds.set(i, color);
     }
     leds.show();
@@ -164,8 +164,8 @@ export async function rotateAngle(
   const PURPLE = 0x300030;
 
   const setAllLeds = (color: number) => {
-    leds.clear();
-    for (let i = 0; i < 8; i++) {
+    // Nastavujeme pouze LED 2 až 7 (LED 0 a 1 jsou vyhrazeny pro sensory)
+    for (let i = 2; i < 8; i++) {
       leds.set(i, color);
     }
     leds.show();
@@ -258,8 +258,8 @@ export async function driveArc(
   const PURPLE = 0x300030;
 
   const setAllLeds = (color: number) => {
-    leds.clear();
-    for (let i = 0; i < 8; i++) {
+    // Nastavujeme pouze LED 2 až 7 (LED 0 a 1 jsou vyhrazeny pro sensory)
+    for (let i = 2; i < 8; i++) {
       leds.set(i, color);
     }
     leds.show();

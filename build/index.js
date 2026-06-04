@@ -314,6 +314,26 @@ async function getDistance(sensor) {
         return 9999;
     }
 }
+// -------------------- VIZUALIZACE SENZORŮ NA LED PÁSKU --------------------
+function updateSensorLeds(front, left) {
+    if (emergencyLatched)
+        return;
+    // LED 0 (první): Přední senzor (hranice 20 cm = 200 mm)
+    if (front <= 200) {
+        leds.set(0, 0x300000); // Červená (překážka nablízku)
+    }
+    else {
+        leds.set(0, 0x003000); // Zelená (volno)
+    }
+    // LED 1 (druhá): Levý/boční senzor (hranice 30 cm = 300 mm)
+    if (left <= 300) {
+        leds.set(1, 0x300000); // Červená (zeď nablízku)
+    }
+    else {
+        leds.set(1, 0x003000); // Zelená (volno/roh)
+    }
+    leds.show();
+}
 // -------------------- AUTONOMNÍ POHYB JEDEM (Wall Follower) --------------------
 async function jedem() {
     const DIST_THRESHOLD = 300; // Zvýšeno z 200 na 300 mm (30 cm) pro včasnou detekci levého rohu
@@ -321,6 +341,8 @@ async function jedem() {
     while (!emergencyLatched) {
         const left = await getDistance(leftLidar);
         const front = await getDistance(lidar);
+        // Aktualizujeme LED stav na základě měření
+        updateSensorLeds(front, left);
         console.log(`[jedem] Leve: ${left.toFixed(0)} mm | Predni: ${front.toFixed(0)} mm`);
         if (left > DIST_THRESHOLD) {
             console.log("-> Vlevo volno: zatáčím plynulým obloukem 90° vlevo (R=120 mm)");
@@ -336,6 +358,7 @@ async function jedem() {
             SPEED_NORMAL, EMERGENCY_BUTTON_PIN, angleState, leds, emergencyStop, () => emergencyLatched, async () => {
                 const currLeft = await getDistance(leftLidar);
                 const currFront = await getDistance(lidar);
+                updateSensorLeds(currFront, currLeft);
                 // Zastavíme, pokud je vlevo volno nebo je vepředu překážka
                 return (currLeft > DIST_THRESHOLD || currFront <= DIST_THRESHOLD);
             });

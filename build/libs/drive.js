@@ -25,8 +25,8 @@ export async function driveStraight(robutek, gyro, gyroZOffset, distanceMm, spee
     const GREEN = 0x003000;
     const PURPLE = 0x300030;
     const setAllLeds = (color) => {
-        leds.clear();
-        for (let i = 0; i < 8; i++) {
+        // Nastavujeme pouze LED 2 až 7 (LED 0 a 1 jsou vyhrazeny pro sensory)
+        for (let i = 2; i < 8; i++) {
             leds.set(i, color);
         }
         leds.show();
@@ -123,8 +123,8 @@ export async function rotateAngle(robutek, angleState, targetAngleChange, speed,
     const BLUE = 0x000030;
     const PURPLE = 0x300030;
     const setAllLeds = (color) => {
-        leds.clear();
-        for (let i = 0; i < 8; i++) {
+        // Nastavujeme pouze LED 2 až 7 (LED 0 a 1 jsou vyhrazeny pro sensory)
+        for (let i = 2; i < 8; i++) {
             leds.set(i, color);
         }
         leds.show();
@@ -195,8 +195,8 @@ export async function driveArc(robutek, angleState, radiusMm, targetAngle, baseS
     const CYAN = 0x003030;
     const PURPLE = 0x300030;
     const setAllLeds = (color) => {
-        leds.clear();
-        for (let i = 0; i < 8; i++) {
+        // Nastavujeme pouze LED 2 až 7 (LED 0 a 1 jsou vyhrazeny pro sensory)
+        for (let i = 2; i < 8; i++) {
             leds.set(i, color);
         }
         leds.show();
