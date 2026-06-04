@@ -7,139 +7,28 @@ import { SmartLed, LED_WS2812B } from "smartled";
 import * as gpio from "gpio";
 
 // ======================================================
-// ROBOCARTS - NOVY CISTY PROGRAM
-// Pouze:
-// 1x VL53L0X na servu
-// spodní RGB senzor na černou cílovou čáru
-// START tlačítko IO2
-// NOUZOVE tlačítko IO17
+// TESTOVACÍ PROGRAM PRO SENSORY ROBOTA
+// - Čtení hodnot z Lidaru (VL53L0X) na servu (BEZ OTÁČENÍ SERVA!)
+// - Čtení dolních infračervených senzorů čáry (LineFL, LineFR, LineBL, LineBR)
+// - Vyhledání a čtení gyroskopu (MPU6050)
+// - Ovládání LED pásku (na startu čekání, po stisku IO2 blikání/indikace hodnot)
 // ======================================================
 
 const robutek = createRobutek("V2");
 
 // -------------------- PINY --------------------
-
 const START_BUTTON_PIN = 2;
 const EMERGENCY_BUTTON_PIN = 17;
-
 const I2C2_SDA = 15;
 const I2C2_SCL = 16;
-
 const SERVO_PIN = 21;
-
 const LED_PIN = 36;
 const LED_COUNT = 8;
 
-// POZOR:
-// GPIO36 na ESP32 často neumí výstup.
-// Pokud LED nesvítí, dej LED pásek na jiný výstupní pin.
-
-// -------------------- SERVO --------------------
-
-// Když se servo dívá opačně, změň na true.
-const SERVO_REVERSE = false;
-
-// Úhly možná bude potřeba doladit podle reálného držáku.
-const ANGLE_LEFT = 45;
+// Úhly serva
 const ANGLE_CENTER = 90;
-const ANGLE_RIGHT = 135;
 
-// -------------------- JIZDA --------------------
-
-// Když robot při move(0) nejede rovně:
-// zatáčí doleva  -> dej třeba +0.08
-// zatáčí doprava -> dej třeba -0.08
-const MOTOR_TRIM = 0.00;
-
-// Když robot zatáčí opačně, změň na -1.
-const CURVE_SIGN = -1;
-
-// SILNEJSI ZATACENI:
-// snizena rychlost v zatacce, mensi RAMP a vyssi zisk korekce.
-// Kdyby robot zatacel na spatnou stranu, zmen pouze CURVE_SIGN na opacne znamenko.
-
-const SPEED_START = 260;
-const SPEED_NORMAL = 270;
-const SPEED_SLOW = 190;
-const SPEED_TURN = 150;
-
-const RAMP = 350;
-
-// Po startu robot hned jede podle laseru na servu.
-// 0 = zadna rovna faze bez rozhodovani.
-const START_STRAIGHT_MS = 0;
-
-// -------------------- LIDAR --------------------
-
-const SAMPLES_PER_SIDE = 5;
-const SAMPLE_DELAY_MS = 25;
-const SERVO_SETTLE_MS = 160;
-
-const DIST_MIN_VALID = 30;
-const DIST_MAX_VALID = 1200;
-const DIST_NO_READ = 1200;
-
-// Odpočet chyby měření.
-const DIST_ERROR_SUBTRACT = 30;
-
-// -------------------- ROZHODOVANI --------------------
-
-const FRONT_DANGER = 320;
-const FRONT_TURN = 650;
-const FRONT_SLOW = 850;
-
-const SIDE_TOO_CLOSE = 300;
-const SIDE_NEAR = 620;
-
-// -------------------- POMEROVE RIZENI PODLE LIDARU --------------------
-// Zataceni se pocita SYMETRICKY podle pomeru vzdalenosti vlevo/vpravo:
-// ratio = (prava - leva) / (prava + leva)
-// ratio > 0  => vice mista vpravo  => robot zataci doprava
-// ratio < 0  => vice mista vlevo   => robot zataci doleva
-// ratio = 0  => strany jsou stejne => robot jede rovne
-//
-// Kdyz robot zataci malo, zvys RATIO_CURVE_GAIN nebo MAX_NORMAL_CURVE.
-// Kdyz kmitá ze strany na stranu, sniz RATIO_CURVE_GAIN.
-const RATIO_DEADBAND = 0.08;
-const RATIO_CURVE_GAIN = 1.70;
-const RATIO_REPEL_GAIN = 1.25;
-const FRONT_RATIO_GAIN = 0.55;
-
-const MAX_NORMAL_CURVE = 0.85;
-const MIN_TURN_CURVE = 0.45;
-const MAX_TURN_CURVE = 1.00;
-const HARD_TURN_CURVE = 1.00;
-
-// Kompenzace mechanickeho posunu lidaru/serva.
-// Nech 0/0 pro uplne stejne chovani doleva i doprava.
-// Kdyz robot i v rovne chodbe porad tahne doleva, dej treba RIGHT_DISTANCE_OFFSET_MM = 20.
-// Kdyz robot porad tahne doprava, dej treba LEFT_DISTANCE_OFFSET_MM = 20.
-const LEFT_DISTANCE_OFFSET_MM = 0;
-const RIGHT_DISTANCE_OFFSET_MM = 0;
-
-// Pri uplne stejnem prostoru vlevo/vpravo program NESMI preferovat jednu stranu.
-// Kdyz je pred robotem prekazka a pomer je temer nulovy, smer se bude stridat.
-let lastForcedTurnDir = 1;
-
-// -------------------- RGB CILOVA CARA --------------------
-
-const RGB_ENABLE = true;
-
-// false = běžná adresa, true = druhá varianta adresy
-const RGB_ADDR_BIT = false;
-
-// Tohle musíš doladit podle výpisu v monitoru.
-// Na černé bude clear a RGB součet výrazně menší než na bílé.
-const BLACK_CLEAR_MAX = 180;
-const BLACK_RGB_SUM_MAX = 420;
-
-const LINE_DEBOUNCE_MS = 1200;
-
-// 0 = robot se po čáře sám nezastaví
-const TARGET_LAPS = 0;
-
-// -------------------- LED BARVY --------------------
-
+// LED barvy
 const OFF = 0x000000;
 const BLUE = 0x000030;
 const GREEN = 0x003000;
@@ -149,83 +38,76 @@ const CYAN = 0x003030;
 const PURPLE = 0x300030;
 const WHITE = 0x202020;
 
-// -------------------- PROMENNE --------------------
-
 const leds = new SmartLed(LED_PIN, LED_COUNT, LED_WS2812B);
 const servo = new Servo(SERVO_PIN, 1, 4);
 
 let lidar: VL53L0X | null = null;
 let rgb: ZSCS2016C | null = null;
 
+// -------------------- GYROSKOP (MPU6050) OVLADAČ --------------------
+class MPU6050 {
+  private i2c: any;
+  public ad: number;
+
+  constructor(i2c: any) {
+    this.i2c = i2c;
+    this.ad = 0x68;
+  }
+
+  // Zkusí najít gyroskop na adresách 0x68 nebo 0x69
+  probe(): boolean {
+    for (const addr of [0x68, 0x69]) {
+      try {
+        // Zápis registru WHO_AM_I (0x75)
+        this.i2c.writeTo(addr, 0x75);
+        const id = this.i2c.readFrom(addr, 1)[0];
+        console.log("MPU6050: WHO_AM_I na adrese 0x" + addr.toString(16) + " vrátil 0x" + id.toString(16));
+        this.ad = addr;
+        return true;
+      } catch (e) {
+        // Adresa neodpovídá, zkusit další
+      }
+    }
+    return false;
+  }
+
+  init() {
+    // Probudit gyroskop: zapsat 0x00 do registru PWR_MGMT_1 (0x6B)
+    this.i2c.writeTo(this.ad, [0x6B, 0x00]);
+  }
+
+  read() {
+    // Přečte 14 bajtů dat od registru 0x3B (ACCEL_XOUT_H)
+    const data = this.i2c.writeRead(this.ad, 0x3B, 14);
+    
+    const toInt16 = (high: number, low: number) => {
+      let val = (high << 8) | low;
+      if (val & 0x8000) val -= 0x10000;
+      return val;
+    };
+
+    return {
+      accel: {
+        x: toInt16(data[0], data[1]),
+        y: toInt16(data[2], data[3]),
+        z: toInt16(data[4], data[5]),
+      },
+      temp: toInt16(data[6], data[7]) / 340.0 + 36.53,
+      gyro: {
+        x: toInt16(data[8], data[9]),
+        y: toInt16(data[10], data[11]),
+        z: toInt16(data[12], data[13]),
+      }
+    };
+  }
+}
+
+let gyro: MPU6050 | null = null;
 let emergencyLatched = false;
-let lapCount = 0;
-let lastLineTime = 0;
 
-let lastLeft = DIST_NO_READ;
-let lastFront = DIST_NO_READ;
-let lastRight = DIST_NO_READ;
-
-let lastLeftRaw = "";
-let lastFrontRaw = "";
-let lastRightRaw = "";
-
-let lastRgbClear = -1;
-let lastRgbSum = -1;
-
-let driveStartTime = 0;
-
-// -------------------- POMOCNE FUNKCE --------------------
-
+// -------------------- POMOCNÉ FUNKCE --------------------
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function clamp(x: number, min: number, max: number): number {
-  if (x < min) return min;
-  if (x > max) return max;
-  return x;
-}
-
-function abs(x: number): number {
-  return x < 0 ? -x : x;
-}
-
-function safeDistance(d: number): number {
-  if (!validDistance(d)) {
-    return DIST_NO_READ;
-  }
-
-  return clamp(d, DIST_MIN_VALID, DIST_NO_READ);
-}
-
-function correctedLeftDistance(left: number): number {
-  return safeDistance(left) + LEFT_DISTANCE_OFFSET_MM;
-}
-
-function correctedRightDistance(right: number): number {
-  return safeDistance(right) + RIGHT_DISTANCE_OFFSET_MM;
-}
-
-function sideRatio(left: number, right: number): number {
-  const l = correctedLeftDistance(left);
-  const r = correctedRightDistance(right);
-  const sum = l + r;
-
-  if (sum <= 0) {
-    return 0;
-  }
-
-  // -1 az +1. Kladne = vpravo je vice mista.
-  return clamp((r - l) / sum, -1, 1);
-}
-
-function ratioToCurve(ratio: number, gain: number, maxCurve: number): number {
-  if (abs(ratio) < RATIO_DEADBAND) {
-    return MOTOR_TRIM;
-  }
-
-  const c = ratio * gain;
-  return MOTOR_TRIM + clamp(c, -maxCurve, maxCurve);
 }
 
 function isPressed(pin: number): boolean {
@@ -241,12 +123,6 @@ function setAllLeds(color: number): void {
 }
 
 function servoValue(angle: number): number {
-  angle = clamp(angle, 0, 180);
-
-  if (SERVO_REVERSE) {
-    angle = 180 - angle;
-  }
-
   return Math.round((angle / 180) * 1023);
 }
 
@@ -254,345 +130,18 @@ function setServoAngle(angle: number): void {
   servo.write(servoValue(angle));
 }
 
-function validDistance(d: number): boolean {
-  return d >= DIST_MIN_VALID && d <= DIST_MAX_VALID;
-}
-
-function samplesToText(values: number[]): string {
-  let s = "[";
-  for (let i = 0; i < values.length; i++) {
-    if (i > 0) s += ",";
-    s += values[i];
-  }
-  s += "]";
-  return s;
-}
-
-function sortNumbers(values: number[]): number[] {
-  const a: number[] = [];
-
-  for (let i = 0; i < values.length; i++) {
-    a.push(values[i]);
-  }
-
-  for (let i = 0; i < a.length - 1; i++) {
-    for (let j = i + 1; j < a.length; j++) {
-      if (a[j] < a[i]) {
-        const t = a[i];
-        a[i] = a[j];
-        a[j] = t;
-      }
-    }
-  }
-
-  return a;
-}
-
-function averageGoodSamples(values: number[]): number {
-  const good: number[] = [];
-
-  for (let i = 0; i < values.length; i++) {
-    const d = values[i];
-
-    if (validDistance(d)) {
-      good.push(d);
-    }
-  }
-
-  if (good.length == 0) {
-    return DIST_NO_READ;
-  }
-
-  const sorted = sortNumbers(good);
-
-  // Pri 5 merenich odrizneme nejmensi a nejvetsi hodnotu.
-  // Tim se rozhodovani neridi jednou spatnou spickou z lidaru.
-  let start = 0;
-  let end = sorted.length;
-
-  if (sorted.length >= 5) {
-    start = 1;
-    end = sorted.length - 1;
-  }
-
-  let sum = 0;
-  let count = 0;
-
-  for (let i = start; i < end; i++) {
-    sum += sorted[i];
-    count++;
-  }
-
-  if (count == 0) {
-    return DIST_NO_READ;
-  }
-
-  let avg = Math.round(sum / count);
-
-  avg -= DIST_ERROR_SUBTRACT;
-
-  return clamp(avg, DIST_MIN_VALID, DIST_NO_READ);
-}
-
-async function stopRobot(): Promise<void> {
-  try {
-    await robutek.stop(true);
-  } catch (e) {
-    console.log("stop chyba: " + e);
-  }
-
-  try {
-    robutek.setSpeed(0);
-  } catch (e) {
-    console.log("setSpeed chyba: " + e);
-  }
-
-  setServoAngle(ANGLE_CENTER);
-}
-
-async function emergencyStop(): Promise<void> {
-  emergencyLatched = true;
-  await stopRobot();
-  setAllLeds(RED);
-  console.log("NOUZOVE STOP - uvolni IO17 a zmackni IO2 pro novy start");
-}
-
-async function sleepCheck(ms: number): Promise<boolean> {
-  const end = Date.now() + ms;
-
-  while (Date.now() < end) {
-    if (isPressed(EMERGENCY_BUTTON_PIN)) {
-      await emergencyStop();
-      return false;
-    }
-
-    await sleep(2);
-  }
-
-  return true;
-}
-
-// -------------------- LIDAR MERENI --------------------
-
-async function readLidarRaw(): Promise<number> {
-  if (lidar == null) return -1;
-
-  try {
-    const m = await lidar.read();
-    return m.distance;
-  } catch (e) {
-    return -1;
-  }
-}
-
-async function measureAngle(angle: number): Promise<{ dist: number, raw: string }> {
-  setServoAngle(angle);
-
-  if (!(await sleepCheck(SERVO_SETTLE_MS))) {
-    return { dist: DIST_NO_READ, raw: "STOP" };
-  }
-
-  const values: number[] = [];
-
-  for (let i = 0; i < SAMPLES_PER_SIDE; i++) {
-    const d = await readLidarRaw();
-    values.push(d);
-
-    if (i < SAMPLES_PER_SIDE - 1) {
-      if (!(await sleepCheck(SAMPLE_DELAY_MS))) {
-        return { dist: DIST_NO_READ, raw: "STOP" };
-      }
-    }
-  }
-
-  return {
-    dist: averageGoodSamples(values),
-    raw: samplesToText(values),
-  };
-}
-
-async function scanAll(): Promise<boolean> {
-  const front1 = await measureAngle(ANGLE_CENTER);
-  if (front1.raw == "STOP") return false;
-
-  const left = await measureAngle(ANGLE_LEFT);
-  if (left.raw == "STOP") return false;
-
-  const front2 = await measureAngle(ANGLE_CENTER);
-  if (front2.raw == "STOP") return false;
-
-  const right = await measureAngle(ANGLE_RIGHT);
-  if (right.raw == "STOP") return false;
-
-  lastLeft = left.dist;
-  lastFront = front1.dist < front2.dist ? front1.dist : front2.dist;
-  lastRight = right.dist;
-
-  lastLeftRaw = left.raw;
-  lastFrontRaw = front1.raw + "/" + front2.raw;
-  lastRightRaw = right.raw;
-
-  return true;
-}
-
-// -------------------- RGB --------------------
-
-function readBlackLine(): boolean {
-  if (!RGB_ENABLE || rgb == null) {
-    return false;
-  }
-
-  try {
-    const clear = rgb.readRawClear();
-    const raw = rgb.readRawRGB();
-
-    const sum = raw[0] + raw[1] + raw[2];
-
-    lastRgbClear = clear;
-    lastRgbSum = sum;
-
-    return clear > 0 &&
-           clear < BLACK_CLEAR_MAX &&
-           sum > 0 &&
-           sum < BLACK_RGB_SUM_MAX;
-  } catch (e) {
-    lastRgbClear = -1;
-    lastRgbSum = -1;
-    return false;
-  }
-}
-
-async function checkFinishLine(): Promise<boolean> {
-  if (!readBlackLine()) {
-    return false;
-  }
-
-  const now = Date.now();
-
-  if (now - lastLineTime < LINE_DEBOUNCE_MS) {
-    return false;
-  }
-
-  lastLineTime = now;
-  lapCount++;
-
-  console.log("CERNA CILOVA CARA: kolo=" + lapCount +
-              " clear=" + lastRgbClear +
-              " sum=" + lastRgbSum);
-
-  setAllLeds(CYAN);
-
-  if (TARGET_LAPS > 0 && lapCount >= TARGET_LAPS) {
-    console.log("HOTOVO - dosazen pocet kol: " + TARGET_LAPS);
-    await stopRobot();
-    setAllLeds(PURPLE);
-    return true;
-  }
-
-  return false;
-}
-
-// -------------------- ROZHODOVANI JIZDY --------------------
-
-function chooseTurnDirection(): number {
-  // -1 = vlevo, +1 = vpravo
-  // Rozhodnuti je symetricky podle pomeru stran.
-  const ratio = sideRatio(lastLeft, lastRight);
-
-  if (abs(ratio) > RATIO_DEADBAND) {
-    return ratio > 0 ? 1 : -1;
-  }
-
-  // Kdyz jsou obe strany prakticky stejne, nesmi byt pevna preference.
-  // Proto pri nucene zatacce smer stridame.
-  lastForcedTurnDir = -lastForcedTurnDir;
-  return lastForcedTurnDir;
-}
-
-function calculateCurve(): { speed: number, curve: number, mode: string } {
-  let speed = SPEED_NORMAL;
-  let curve = MOTOR_TRIM;
-  let mode = "ROVNE";
-
-  const ratio = sideRatio(lastLeft, lastRight);
-
-  // Pred robotem je hodne blizko zed.
-  // Zataceni je podle pomeru stran, ale ma minimalni silu, aby se robot opravdu odlepil.
-  if (lastFront < FRONT_DANGER) {
-    const dir = chooseTurnDirection();
-    speed = SPEED_TURN;
-    curve = dir * HARD_TURN_CURVE;
-    mode = dir < 0 ? "NEBEZPECI_POMER_VLEVO" : "NEBEZPECI_POMER_VPRAVO";
-    return { speed, curve, mode };
-  }
-
-  // Pred robotem se blizi zatacka.
-  // Cim vetsi pomerovy rozdil mezi levou a pravou stranou, tim silneji zatoci.
-  if (lastFront < FRONT_TURN) {
-    const dir = chooseTurnDirection();
-    const frontUrgency = clamp((FRONT_TURN - lastFront) / FRONT_TURN, 0, 1);
-    const ratioPower = clamp(abs(ratio) * FRONT_RATIO_GAIN + frontUrgency * 0.55, 0, 1);
-
-    speed = SPEED_TURN;
-    curve = dir * clamp(MIN_TURN_CURVE + ratioPower, MIN_TURN_CURVE, MAX_TURN_CURVE);
-    mode = dir < 0 ? "ZATACKA_POMER_VLEVO" : "ZATACKA_POMER_VPRAVO";
-    return { speed, curve, mode };
-  }
-
-  // Pred robotem je mene mista, zpomal.
-  if (lastFront < FRONT_SLOW) {
-    speed = SPEED_SLOW;
-  } else {
-    speed = SPEED_NORMAL;
-  }
-
-  // Kdyz je jedna strana moc blizko, pouzij silnejsi pomerove odtlaceni.
-  // Blizko vlevo => ratio bude kladne => zatoc doprava.
-  // Blizko vpravo => ratio bude zaporne => zatoc doleva.
-  if (lastLeft < SIDE_TOO_CLOSE || lastRight < SIDE_TOO_CLOSE) {
-    curve = ratioToCurve(ratio, RATIO_CURVE_GAIN + RATIO_REPEL_GAIN, MAX_NORMAL_CURVE);
-    mode = curve > MOTOR_TRIM ? "ODTLACENI_POMER_DOPRAVA" : "ODTLACENI_POMER_DOLEVA";
-    return { speed, curve, mode };
-  }
-
-  // Normalni centrovani mezi stenami podle pomeru vzdalenosti.
-  if (lastLeft < SIDE_NEAR || lastRight < SIDE_NEAR) {
-    curve = ratioToCurve(ratio, RATIO_CURVE_GAIN, MAX_NORMAL_CURVE);
-
-    if (abs(curve - MOTOR_TRIM) > 0.001) {
-      mode = curve > MOTOR_TRIM ? "CENTRUJI_POMER_DOPRAVA" : "CENTRUJI_POMER_DOLEVA";
-      return { speed, curve, mode };
-    }
-  }
-
-  // Jinak rovne. Pri vyrovnanem pomeru nedavame zadnou stranovou preferenci.
-  curve = MOTOR_TRIM;
-  mode = "ROVNE_POMER_VYROVNANY_BEZ_PREFERENCE";
-
-  return { speed, curve, mode };
-}
-
-// -------------------- INIT --------------------
-
+// -------------------- INICIALIZACE HW --------------------
 async function initHardware(): Promise<void> {
   gpio.pinMode(START_BUTTON_PIN, gpio.PinMode.INPUT_PULLUP);
   gpio.pinMode(EMERGENCY_BUTTON_PIN, gpio.PinMode.INPUT_PULLUP);
 
   setAllLeds(WHITE);
-
-  await stopRobot();
-
-  robutek.setRamp(RAMP);
-  robutek.setSpeed(0);
-
-  setServoAngle(ANGLE_CENTER);
+  setServoAngle(ANGLE_CENTER); // Nastavíme na střed a už s ním neotáčíme!
 
   console.log("======================================");
-  console.log("ROBOCARTS NOVY CISTY PROGRAM");
-  console.log("IO2 = START");
-  console.log("IO17 = NOUZOVE STOP");
+  console.log("TEST SENSORŮ - INICIALIZACE");
+  console.log("IO2 = START, IO17 = NOUZOVE STOP");
   console.log("I2C2 SDA=" + I2C2_SDA + " SCL=" + I2C2_SCL);
-  console.log("Servo pin=" + SERVO_PIN);
   console.log("======================================");
 
   try {
@@ -601,159 +150,198 @@ async function initHardware(): Promise<void> {
       scl: I2C2_SCL,
       bitrate: 400000,
     });
-
-    console.log("OK I2C2");
+    console.log("OK: I2C2 sběrnice nastavena.");
   } catch (e) {
     console.log("CHYBA I2C2: " + e);
   }
 
-  try {
-    lidar = new VL53L0X(I2C2);
-    console.log("OK VL53L0X");
-  } catch (e) {
-    lidar = null;
-    console.log("CHYBA VL53L0X: " + e);
-  }
-
-  if (RGB_ENABLE) {
+  // Scan I2C2 sběrnice pro diagnostiku
+  console.log("Skenuji I2C2 sběrnici...");
+  for (let addr = 1; addr < 127; addr++) {
     try {
-      rgb = new ZSCS2016C(I2C2, RGB_ADDR_BIT);
-      rgb.enable();
-      console.log("OK RGB ZSCS2016C");
+      I2C2.writeTo(addr, []);
+      console.log(` -> Nalezeno I2C zařízení na adrese 0x${addr.toString(16)} (${addr})`);
     } catch (e) {
-      rgb = null;
-      console.log("CHYBA RGB: " + e);
-      console.log("Kdyz je RGB zapojeny, zkus zmenit RGB_ADDR_BIT na true.");
+      // Žádné zařízení neodpovědělo
     }
   }
 
-  setAllLeds(BLUE);
+  // Lidar
+  try {
+    lidar = new VL53L0X(I2C2);
+    console.log("OK: Lidar VL53L0X připojen.");
+  } catch (e) {
+    console.log("CHYBA Lidar (VL53L0X): " + e);
+  }
+
+  // RGB senzor
+  try {
+    rgb = new ZSCS2016C(I2C2, false);
+    rgb.enable();
+    console.log("OK: RGB ZSCS2016C připojen.");
+  } catch (e) {
+    console.log("CHYBA RGB: " + e);
+  }
+
+  // Gyroskop MPU6050
+  try {
+    gyro = new MPU6050(I2C2);
+    if (gyro.probe()) {
+      gyro.init();
+      console.log("OK: Gyroskop MPU6050 inicializován.");
+    } else {
+      gyro = null;
+      console.log("CHYBA: Gyroskop MPU6050 nebyl nalezen na I2C2.");
+    }
+  } catch (e) {
+    gyro = null;
+    console.log("CHYBA Gyroskop: " + e);
+  }
+
+  setAllLeds(YELLOW); // Po úspěšném bootu svítí žlutě a čeká na start
 }
 
-// -------------------- CEKANI NA START --------------------
-
+// -------------------- ČEKÁNÍ NA START --------------------
 async function waitForStart(): Promise<void> {
-  await stopRobot();
-  setAllLeds(BLUE);
-
   console.log("CEKAM NA START - zmackni IO2");
 
   while (true) {
     if (isPressed(EMERGENCY_BUTTON_PIN)) {
-      await emergencyStop();
+      emergencyLatched = true;
+      setAllLeds(RED);
     }
 
     if (emergencyLatched) {
-      setAllLeds(RED);
-
       if (!isPressed(EMERGENCY_BUTTON_PIN) && isPressed(START_BUTTON_PIN)) {
         await sleep(200);
-
         if (!isPressed(EMERGENCY_BUTTON_PIN) && isPressed(START_BUTTON_PIN)) {
           emergencyLatched = false;
           console.log("NOUZOVE STOP RESETOVANO");
           setAllLeds(YELLOW);
           await sleep(300);
-          return;
         }
       }
-
       await sleep(20);
       continue;
     }
 
     if (isPressed(START_BUTTON_PIN)) {
       await sleep(200);
-
       if (isPressed(START_BUTTON_PIN)) {
-        console.log("START");
-        lapCount = 0;
-        lastLineTime = 0;
-        setAllLeds(YELLOW);
+        console.log("=== START TESTU ===");
+        setAllLeds(BLUE); // Při startu se rozsvítí modrá!
         await sleep(300);
         return;
       }
     }
-
     await sleep(20);
   }
 }
 
-// -------------------- HLAVNI JIZDA --------------------
-
-async function drive(): Promise<void> {
-  let lastPrint = 0;
-
-  await stopRobot();
-
-  console.log("LASER OD STARTU - kazdy smer meri 5x, odstrani spicky a podle prumeru rozhodne");
-
-  setServoAngle(ANGLE_CENTER);
-  await sleepCheck(300);
-
-  driveStartTime = Date.now();
-  setAllLeds(GREEN);
-
+// -------------------- SMYČKA MĚŘENÍ --------------------
+async function runTest(): Promise<void> {
   while (!emergencyLatched) {
     if (isPressed(EMERGENCY_BUTTON_PIN)) {
-      await emergencyStop();
+      emergencyLatched = true;
+      setAllLeds(RED);
+      console.log("NOUZOVE ZASTAVENI");
       break;
     }
 
-    // HNED OD STARTU: sken vlevo / stred / vpravo.
-    // Kazdy smer se meri 5x a rozhoduje se az z ocisteneho prumeru.
-    if (!(await scanAll())) {
-      break;
+    console.log("----------------------------------------");
+
+    // 1. Měření Lidaru (středová vzdálenost, bez otáčení serva)
+    let distStr = "N/A";
+    let distVal = 0;
+    if (lidar != null) {
+      try {
+        const m = await lidar.read();
+        distVal = m.distance;
+        distStr = distVal + " mm";
+      } catch (e) {
+        distStr = "Chyba (" + e + ")";
+      }
+    }
+    console.log("Lidar (vzdálenost): " + distStr);
+
+    // 2. Měření spodních IR senzorů čáry
+    const lfl = robutek.readSensor('LineFL');
+    const lfr = robutek.readSensor('LineFR');
+    const lbl = robutek.readSensor('LineBL');
+    const lbr = robutek.readSensor('LineBR');
+    console.log(`Senzory čáry: FL=${lfl} | FR=${lfr} | BL=${lbl} | BR=${lbr}`);
+
+    // Doplňkově RGB senzor (pokud je připojen)
+    if (rgb != null) {
+      try {
+        const clear = rgb.readRawClear();
+        const raw = rgb.readRawRGB();
+        console.log(`RGB Senzor: Clear=${clear} | R=${raw[0]} | G=${raw[1]} | B=${raw[2]}`);
+      } catch (e) {
+        // ignore
+      }
     }
 
-    const d = calculateCurve();
-    const outputCurve = CURVE_SIGN * d.curve;
-
-    robutek.setSpeed(d.speed);
-    robutek.move(outputCurve);
-
-    if (await checkFinishLine()) {
-      break;
+    // 3. Měření Gyroskopu
+    if (gyro != null) {
+      try {
+        const g = gyro.read();
+        console.log(`MPU6050 Gyro: X=${g.gyro.x} | Y=${g.gyro.y} | Z=${g.gyro.z}`);
+        console.log(`MPU6050 Accel: X=${g.accel.x} | Y=${g.accel.y} | Z=${g.accel.z}`);
+        console.log(`MPU6050 Temp: ${g.temp.toFixed(1)} °C`);
+      } catch (e) {
+        console.log("MPU6050 Chyba: " + e);
+      }
+    } else {
+      console.log("Gyroskop: Nedostupný");
     }
 
-    if (Date.now() - lastPrint > 200) {
-      lastPrint = Date.now();
+    // 4. Ovládání a animace LED pásku na základě hodnot
+    // Nastavíme barvu LED podle hodnot:
+    // LED 0, 1, 2, 3 odpovídají senzorům čáry (jas modré barvy podle analogové hodnoty)
+    // LED 4, 5, 6, 7 odpovídají vzdálenosti z lidaru
+    leds.clear();
+    
+    // Mapování čáry (modrá intenzita, max 60 ze 255 pro rozumný jas)
+    leds.set(0, Math.round((lfl / 4095) * 60)); 
+    leds.set(1, Math.round((lfr / 4095) * 60));
+    leds.set(2, Math.round((lbl / 4095) * 60));
+    leds.set(3, Math.round((lbr / 4095) * 60));
 
-      console.log(
-        "LASER_RUN" +
-        " | mode=" + d.mode +
-        " | speed=" + d.speed +
-        " | curve=" + d.curve.toFixed(3) +
-        " | out=" + outputCurve.toFixed(3) +
-        " | ratio=" + sideRatio(lastLeft, lastRight).toFixed(3) +
-        " | L=" + lastLeft + " corr=" + correctedLeftDistance(lastLeft) + " raw" + lastLeftRaw +
-        " | F=" + lastFront + " raw" + lastFrontRaw +
-        " | R=" + lastRight + " corr=" + correctedRightDistance(lastRight) + " raw" + lastRightRaw +
-        " | RGB clear=" + lastRgbClear +
-        " sum=" + lastRgbSum +
-        " | lap=" + lapCount
-      );
+    // Mapování Lidaru na zbylé 4 LED
+    // Pokud je blízko (< 300mm) -> Červená
+    // Středně daleko (300-600mm) -> Žlutá
+    // Daleko (> 600mm) -> Zelená
+    let lidarColor = BLUE; // Výchozí modrá
+    if (distVal > 0) {
+      if (distVal < 300) {
+        lidarColor = RED;
+      } else if (distVal < 600) {
+        lidarColor = YELLOW;
+      } else {
+        lidarColor = GREEN;
+      }
     }
+    
+    for (let i = 4; i < LED_COUNT; i++) {
+      leds.set(i, lidarColor);
+    }
+    leds.show();
 
-    await sleepCheck(5);
+    await sleep(500); // Výpis každou půl sekundu
   }
-
-  await stopRobot();
 }
 
 // -------------------- MAIN --------------------
-
 async function main(): Promise<void> {
   await initHardware();
-
   while (true) {
     await waitForStart();
-    await drive();
+    await runTest();
   }
 }
 
 main().catch(async (e) => {
-  console.log("HLAVNI CHYBA PROGRAMU: " + e);
-  await stopRobot();
+  console.log("CHYBA V TEST PROGRAMU: " + e);
   setAllLeds(PURPLE);
 });
