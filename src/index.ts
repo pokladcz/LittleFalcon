@@ -4,7 +4,7 @@ import { VL53L0X } from "./libs/VL53L0X.js";
 import { Servo } from "./libs/servo.js";
 import { SmartLed, LED_WS2812B } from "smartled";
 import * as gpio from "gpio";
-import { driveStraight, rotateAngle } from "./libs/drive.js";
+import { driveStraight, rotateAngle, driveArc } from "./libs/drive.js";
 
 
 // ======================================================
@@ -414,7 +414,41 @@ async function jedem(): Promise<void> {
 async function runSequence(): Promise<void> {
   setServoAngle(ANGLE_CENTER);
   await sleep(100);
-  await jedem();
+
+  // Zakomentováno sledování zdi pro testování radiusů
+  // await jedem();
+
+  // Testovací radiusy podle požadavku uživatele:
+  // 1. Zatáčka 90 stupňů vlevo (CCW) s poloměrem 10 cm (100 mm)
+  console.log("=== TEST OBLOUKU: 90° vlevo, poloměr 10 cm ===");
+  await driveArc(
+    robutek,
+    angleState,
+    100, // poloměr 100 mm = 10 cm
+    90,  // 90 stupňů vlevo
+    SPEED_NORMAL,
+    EMERGENCY_BUTTON_PIN,
+    leds,
+    emergencyStop,
+    () => emergencyLatched
+  );
+
+  if (emergencyLatched) return;
+  await sleep(1000); // Pauza mezi oblouky
+
+  // 2. Zatáčka 90 stupňů vpravo (CW) s poloměrem 10 cm (100 mm)
+  console.log("=== TEST OBLOUKU: 90° vpravo, poloměr 10 cm ===");
+  await driveArc(
+    robutek,
+    angleState,
+    100,  // poloměr 100 mm = 10 cm
+    -90,  // 90 stupňů vpravo
+    SPEED_NORMAL,
+    EMERGENCY_BUTTON_PIN,
+    leds,
+    emergencyStop,
+    () => emergencyLatched
+  );
 }
 
 // -------------------- MAIN --------------------
