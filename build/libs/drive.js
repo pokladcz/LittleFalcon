@@ -103,17 +103,17 @@ export async function driveStraight(robutek, gyro, gyroZOffset, distanceMm, spee
     await sleep(1000);
 }
 /**
- * Otáčení robota na místě o zadaný úhel s využitím ramp pro plynulé zrychlení a zpomalení (podle Fotonu)
+ * Otáčení robota na místě o zadaný úhel s využitím zpětné vazby z gyroskopu (jednoduchý P-regulátor)
  * @param robutek Instancovaný objekt robutka
  * @param angleState Objekt obsahující aktuální integrovaný úhel angleZ (předávaný referencí)
  * @param targetAngleChange Relativní změna úhlu (kladná = doleva/CCW, záporná = doprava/CW)
- * @param maxSpeed Maximální rychlost otáčení (SPEED_TURN)
+ * @param speed Rychlost otáčení (SPEED_TURN)
  * @param emergencyPin Pin nouzového tlačítka (např. IO17)
  * @param leds Instancovaný LED pásek
  * @param emergencyStopCallback Funkce pro nouzové zastavení
  * @param isEmergencyLatched Funkce pro zjištění nouzového stavu
  */
-export async function rotateAngle(robutek, angleState, targetAngleChange, maxSpeed, emergencyPin, leds, emergencyStopCallback, isEmergencyLatched) {
+export async function rotateAngle(robutek, angleState, targetAngleChange, speed, emergencyPin, leds, emergencyStopCallback, isEmergencyLatched) {
     if (isEmergencyLatched())
         return;
     const BLUE = 0x000030;
@@ -128,54 +128,36 @@ export async function rotateAngle(robutek, angleState, targetAngleChange, maxSpe
     // Reset úhlu před zahájením otáčení
     angleState.angleZ = 0;
     const targetAngle = targetAngleChange;
-    const targetAbs = Math.abs(targetAngle);
     console.log(`Start otáčení na místě o: ${targetAngle.toFixed(1)} °`);
     setAllLeds(BLUE);
-    // Parametry rampy otáčení (hodnoty v mm/s přizpůsobené z Fotonu)
-    const minSpeed = 80; // Zvýšeno na 80 pro spolehlivé překonání tření
-    const rampUpDeg = 8.0; // Sníženo z 15.0 na 8.0 pro velmi agresivní rozjezd
-    const rampDownDeg = 35.0; // Zvětšeno z 30.0 na 35.0 pro plynulé a přesné dobrzdění do cíle
+    robutek.setSpeed(speed);
     let lastLogTime = 0;
     while (!isEmergencyLatched()) {
         if (isPressed(emergencyPin)) {
             await emergencyStopCallback();
             break;
         }
-        const currentAngle = Math.abs(angleState.angleZ);
-        const error = targetAbs - currentAngle;
-        // Rozjezdová rampa
-        let speedAccel = maxSpeed;
-        if (currentAngle < rampUpDeg) {
-            let ratio = currentAngle / rampUpDeg;
-            if (ratio < 0.0)
-                ratio = 0.0;
-            speedAccel = minSpeed + (maxSpeed - minSpeed) * ratio;
-        }
-        // Brzdná rampa
-        let speedDecel = maxSpeed;
-        if (error < rampDownDeg) {
-            let ratio = error / rampDownDeg;
-            if (ratio < 0.0)
-                ratio = 0.0;
-            speedDecel = minSpeed + (maxSpeed - minSpeed) * ratio;
-        }
-        // Výsledná rychlost je dána pomalejší z obou ramp
-        const currentSpeed = Math.min(speedAccel, speedDecel);
-        // Směr otáčení: CCW (kladný úhel) = -1.0 (točí vlevo), CW (záporný úhel) = 1.0 (točí vpravo)
-        const curve = targetAngle > 0 ? -1.0 : 1.0;
+        const error = angleState.angleZ - targetAngle;
+        // P-regulátor zatáčení
+        const Kp = 0.025;
+        let curve = error * Kp;
+        // Omezení curve na rozsah [-1.0, 1.0]
+        if (curve > 1.0)
+            curve = 1.0;
+        if (curve < -1.0)
+            curve = -1.0;
         // Logování průběhu otáčení každých 100 ms
         const nowLog = Date.now();
         if (nowLog - lastLogTime > 100) {
             lastLogTime = nowLog;
-            console.log(`Otáčení: úhel ${angleState.angleZ.toFixed(1)}° / cíl ${targetAngle.toFixed(1)}° | Rychlost: ${currentSpeed.toFixed(0)} mm/s | Výkon: ${(curve * (currentSpeed / maxSpeed)).toFixed(2)}`);
+            console.log(`Otáčení: úhel ${angleState.angleZ.toFixed(1)}° / cíl ${targetAngle.toFixed(1)}° | Chyba: ${error.toFixed(1)}° | Výkon: ${curve.toFixed(2)}`);
         }
-        // Pokud jsme dosáhli cílového úhlu s tolerancí 1.0 stupně, otáčení končí
-        if (error <= 1.0) {
+        // Pokud je chyba velmi malá (méně než 1.5 stupně), otáčení končí
+        if (Math.abs(error) < 1.5) {
             console.log(`Otáčení úspěšně dokončeno. Koncový úhel: ${angleState.angleZ.toFixed(1)} °`);
             break;
         }
-        // Nastavení rychlosti a vyvolání pohybu (neblokující)
-        robutek.setSpeed(currentSpeed);
+        // Voláme neblokující move() bez await
         robutek.move(curve);
         await sleep(10);
     }

@@ -105,9 +105,9 @@ let intervalId: number | null = null;
 let emergencyLatched = false;
 
 // -------------------- PARAMETRY JÍZDY --------------------
-const SPEED_NORMAL = 600;
-const SPEED_TURN = 240;
-const RAMP = 1500;
+const SPEED_NORMAL = 700;
+const SPEED_TURN = 150;
+const RAMP = 3000;
 
 // Pokud robot při zatáčení uhýbá na špatnou stranu, změň na +1.
 const CURVE_SIGN = -1;
