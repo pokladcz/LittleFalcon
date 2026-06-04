@@ -406,7 +406,7 @@ async function jedem() {
                 await sleep(50);
             }
         }
-        await sleep(20);
+        await sleep(5);
     }
 }
 // -------------------- TESTOVACÍ SEKVENCE POHYBŮ --------------------

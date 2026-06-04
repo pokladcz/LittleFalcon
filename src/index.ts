@@ -474,7 +474,7 @@ async function jedem(): Promise<void> {
       }
     }
 
-    await sleep(20);
+    await sleep(5);
   }
 }
 

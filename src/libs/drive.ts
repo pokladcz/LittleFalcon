@@ -39,8 +39,10 @@ export async function driveStraight(
 
   // Zastavíme předchozí pohyb a uvolníme motory pro nový start (předchází chybě Motor is already moving)
   try {
+    robutek.leftMotor.setRamp(0);
+    robutek.rightMotor.setRamp(0);
     await robutek.stop(true); // Aktivní brzdění pro rychlou deakceleraci
-    await sleep(50); // Krátká pauza na zprocesování stopu v systému (zabraňuje race condition)
+    await sleep(15); // Krátká pauza na zprocesování stopu v systému (zabraňuje race condition)
   } catch (e) {}
 
   const GREEN = 0x003000;
@@ -252,8 +254,10 @@ export async function driveArc(
 
   // Zastavíme předchozí pohyb a uvolníme motory pro nový start (předchází chybě Motor is already moving)
   try {
+    robutek.leftMotor.setRamp(0);
+    robutek.rightMotor.setRamp(0);
     await robutek.stop(true); // Aktivní brzdění pro rychlou deakceleraci
-    await sleep(50); // Krátká pauza na zprocesování stopu v systému (zabraňuje race condition)
+    await sleep(15); // Krátká pauza na zprocesování stopu v systému (zabraňuje race condition)
   } catch (e) {}
 
   const CYAN = 0x003030;
@@ -363,8 +367,10 @@ export async function driveArc(
 
   // Zastavíme a zabrzdíme motory pro přesné změření konečného úhlu gyroskopem
   try {
+    robutek.leftMotor.setRamp(0);
+    robutek.rightMotor.setRamp(0);
     await robutek.stop(true);
-    await sleep(50);
+    await sleep(15);
   } catch (e) {}
 
   // Gyroskopická kontrola a případná drobná korekce (dorovnání)
