@@ -382,11 +382,9 @@ async function startLidarLoop(): Promise<void> {
   console.log("=== START SENSOR LOOP (Kontinuální čtení na pozadí) ===");
   while (!emergencyLatched) {
     try {
-      // Čteme z obou I2C sběrnic paralelně
-      const [left, front] = await Promise.all([
-        getDistance(leftLidar),
-        getDistance(lidar)
-      ]);
+      // Čteme z obou I2C sběrnic sekvenčně pro zamezení konfliktů v I2C ovladači
+      const left = await getDistance(leftLidar);
+      const front = await getDistance(lidar);
       latestLeftDistance = left;
       latestFrontDistance = front;
       
