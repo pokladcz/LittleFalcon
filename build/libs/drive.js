@@ -22,6 +22,11 @@ function sleep(ms) {
 export async function driveStraight(robutek, gyro, gyroZOffset, distanceMm, speed, emergencyPin, angleState, leds, emergencyStopCallback, isEmergencyLatched, shouldStopPredicate) {
     if (isEmergencyLatched())
         return;
+    // Zastavíme předchozí pohyb a uvolníme motory pro nový start (předchází chybě Motor is already moving)
+    try {
+        await robutek.stop();
+    }
+    catch (e) { }
     const GREEN = 0x003000;
     const PURPLE = 0x300030;
     const setAllLeds = (color) => {
@@ -182,6 +187,11 @@ export async function rotateAngle(robutek, angleState, targetAngleChange, speed,
 export async function driveArc(robutek, angleState, radiusMm, targetAngle, baseSpeed, emergencyPin, leds, emergencyStopCallback, isEmergencyLatched) {
     if (isEmergencyLatched())
         return;
+    // Zastavíme předchozí pohyb a uvolníme motory pro nový start (předchází chybě Motor is already moving)
+    try {
+        await robutek.stop();
+    }
+    catch (e) { }
     const CYAN = 0x003030;
     const PURPLE = 0x300030;
     const setAllLeds = (color) => {

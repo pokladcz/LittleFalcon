@@ -37,6 +37,11 @@ export async function driveStraight(
 ): Promise<void> {
   if (isEmergencyLatched()) return;
 
+  // Zastavíme předchozí pohyb a uvolníme motory pro nový start (předchází chybě Motor is already moving)
+  try {
+    await robutek.stop();
+  } catch (e) {}
+
   const GREEN = 0x003000;
   const PURPLE = 0x300030;
   
@@ -244,6 +249,11 @@ export async function driveArc(
   isEmergencyLatched: () => boolean
 ): Promise<void> {
   if (isEmergencyLatched()) return;
+
+  // Zastavíme předchozí pohyb a uvolníme motory pro nový start (předchází chybě Motor is already moving)
+  try {
+    await robutek.stop();
+  } catch (e) {}
 
   const CYAN = 0x003030;
   const PURPLE = 0x300030;
