@@ -209,9 +209,15 @@ export async function driveArc(robutek, angleState, radiusMm, targetAngle, baseS
     console.log(`Start oblouku R=${radiusMm} mm, úhel=${targetAngle.toFixed(1)}° | Rychlost: ${baseSpeed} mm/s`);
     setAllLeds(CYAN);
     let lastLogTime = 0;
+    const startTime = Date.now();
     while (!isEmergencyLatched()) {
         if (isPressed(emergencyPin)) {
             await emergencyStopCallback();
+            break;
+        }
+        // Bezpečnostní timeout 3 sekundy
+        if (Date.now() - startTime > 3000) {
+            console.log(`TIMEOUT: Oblouk nedokončen do 3 sekund! Nouzové přerušení. Poslední úhel: ${angleState.angleZ.toFixed(1)} °`);
             break;
         }
         const currentAngle = Math.abs(angleState.angleZ);
