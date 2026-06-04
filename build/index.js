@@ -92,7 +92,7 @@ let emergencyLatched = false;
 // -------------------- PARAMETRY JÍZDY --------------------
 const SPEED_NORMAL = 440;
 const SPEED_TURN = 240;
-const RAMP = 350;
+const RAMP = 800;
 // Pokud robot při zatáčení uhýbá na špatnou stranu, změň na +1.
 const CURVE_SIGN = -1;
 // -------------------- POMOCNÉ FUNKCE --------------------

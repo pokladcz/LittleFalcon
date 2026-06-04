@@ -60,7 +60,7 @@ export async function driveStraight(
   let lastError = 0;
   let lastTimeMs = Date.now();
 
-  console.log(`Start jízdy rovně na ${distanceMm} mm. Cílový úhel: ${targetAngle.toFixed(1)} °`);
+  console.log(`Start jízdy rovně na ${distanceMm} mm. Rychlost: ${speed} mm/s. Cílový úhel: ${targetAngle.toFixed(1)} °`);
   setAllLeds(GREEN);
 
   while (!isEmergencyLatched()) {
@@ -174,9 +174,9 @@ export async function rotateAngle(
   setAllLeds(BLUE);
 
   // Parametry rampy otáčení (hodnoty v mm/s přizpůsobené z Fotonu)
-  const minSpeed = 70;      // Minimální rychlost, aby se robot točil a nezasekl se na tření
-  const rampUpDeg = 15.0;   // Úhel pro zrychlení (rozjezdová rampa)
-  const rampDownDeg = 30.0; // Úhel pro zpomalení (brzdná rampa)
+  const minSpeed = 80;      // Zvýšeno na 80 pro spolehlivé překonání tření
+  const rampUpDeg = 8.0;    // Sníženo z 15.0 na 8.0 pro velmi agresivní rozjezd
+  const rampDownDeg = 35.0; // Zvětšeno z 30.0 na 35.0 pro plynulé a přesné dobrzdění do cíle
 
   let lastLogTime = 0;
 
