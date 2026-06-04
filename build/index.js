@@ -321,8 +321,8 @@ async function getDistance(sensor) {
 function updateSensorLeds(front, left) {
     if (emergencyLatched)
         return;
-    // LED 0 (první): Přední senzor (hranice 20 cm = 200 mm)
-    if (front <= 200) {
+    // LED 0 (první): Přední senzor (hranice 40 cm = 400 mm)
+    if (front <= 400) {
         leds.set(0, 0x300000); // Červená (překážka nablízku)
     }
     else {
@@ -360,7 +360,7 @@ async function jedem() {
             216, // rychlost 216 mm/s
             EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
         }
-        else if (front > DIST_THRESHOLD) {
+        else if (front > 400) {
             console.log("-> Vepředu volno (vlevo zeď): jedu rovně");
             // Jedeme rovně, dokud se neuvolní levá strana (s ohledem na 5s limit) nebo se nezablokuje předek
             await driveStraight(robutek, gyro, gyroZOffset, 5000, // Dlouhá jízda, kterou přerušíme senzory
@@ -371,7 +371,7 @@ async function jedem() {
                 ]);
                 updateSensorLeds(currFront, currLeft);
                 const stopForLeft = (currLeft > DIST_THRESHOLD) && (Date.now() - lastLeftArcTime > 5000);
-                const stopForFront = (currFront <= DIST_THRESHOLD);
+                const stopForFront = (currFront <= 400);
                 return (stopForLeft || stopForFront);
             });
         }

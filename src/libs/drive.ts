@@ -274,24 +274,41 @@ export async function driveArc(
   // Zapamatujeme si úhel na začátku oblouku pro kompenzaci odchylky
   const startAngle = angleState.angleZ;
   const targetAbs = startAngle + targetAngle;
-  const LEAD_ANGLE = 7.0; // Předstih v stupních kvůli setrvačnosti při 216 mm/s
 
-  // Výpočet rychlostí kol (konstantní rychlost po celou dobu oblouku)
-  let leftSpeed = 0;
-  let rightSpeed = 0;
+  // Načtení počátečních pozic enkodérů
+  const startLeft = robutek.leftMotor.getPosition();
+  const startRight = robutek.rightMotor.getPosition();
+
+  // Převod cílového úhlu na radiány pro geometrický výpočet dráhy kol
+  const angleRad = Math.abs(targetAngle) * Math.PI / 180;
   const ratio = d / (2 * radiusMm);
 
+  let leftDistTarget = 0;
+  let rightDistTarget = 0;
+
   if (targetAngle > 0) {
-    // Zatáčení vlevo
+    // Zatáčení vlevo (pravé vnější kolo ujede delší dráhu)
+    leftDistTarget = radiusMm * (1 - ratio) * angleRad;
+    rightDistTarget = radiusMm * (1 + ratio) * angleRad;
+  } else {
+    // Zatáčení vpravo (levé vnější kolo ujede delší dráhu)
+    leftDistTarget = radiusMm * (1 + ratio) * angleRad;
+    rightDistTarget = radiusMm * (1 - ratio) * angleRad;
+  }
+
+  // Výpočet rychlostí kol
+  let leftSpeed = 0;
+  let rightSpeed = 0;
+
+  if (targetAngle > 0) {
     leftSpeed = baseSpeed * (1 - ratio);
     rightSpeed = baseSpeed * (1 + ratio);
   } else {
-    // Zatáčení vpravo
     leftSpeed = baseSpeed * (1 + ratio);
     rightSpeed = baseSpeed * (1 - ratio);
   }
 
-  console.log(`Start oblouku R=${radiusMm} mm, startovní úhel=${startAngle.toFixed(1)}°, cílový úhel=${targetAbs.toFixed(1)}° | Rychlost: ${baseSpeed} mm/s`);
+  console.log(`Start oblouku podle enkodéru: R=${radiusMm} mm, cíl: L=${leftDistTarget.toFixed(0)} mm, R=${rightDistTarget.toFixed(0)} mm | Rychlost: ${baseSpeed} mm/s`);
   setAllLeds(CYAN);
 
   // Nastavení rychlostí a nulových ramp pro okamžitý start
@@ -300,7 +317,7 @@ export async function driveArc(
   robutek.leftMotor.setRamp(0);
   robutek.rightMotor.setRamp(0);
 
-  // Spuštění motorů bez udání dráhy (jednou na začátku, bez await, aby se neblokoval event loop)
+  // Spuštění motorů
   robutek.leftMotor.move();
   robutek.rightMotor.move();
 
@@ -315,24 +332,21 @@ export async function driveArc(
 
     // Bezpečnostní timeout 3 sekundy
     if (Date.now() - startTime > 3000) {
-      console.log(`TIMEOUT: Oblouk nedokončen do 3 sekund! Nouzové přerušení. Poslední úhel: ${angleState.angleZ.toFixed(1)} °`);
+      console.log(`TIMEOUT: Oblouk nedokončen do 3 sekund! Nouzové přerušení.`);
       break;
     }
 
-    const currentAngle = angleState.angleZ;
+    const currentLeft = robutek.leftMotor.getPosition();
+    const currentRight = robutek.rightMotor.getPosition();
+    const traveledLeft = Math.abs(currentLeft - startLeft);
+    const traveledRight = Math.abs(currentRight - startRight);
 
-    // Podmínka zastavení se započteným předstihem (lead angle) pro kompenzaci setrvačnosti
-    let finished = false;
-    if (targetAngle > 0) {
-      // Zatáčení vlevo (úhel roste)
-      finished = (currentAngle >= targetAbs - LEAD_ANGLE);
-    } else {
-      // Zatáčení vpravo (úhel klesá)
-      finished = (currentAngle <= targetAbs + LEAD_ANGLE);
-    }
+    // Řídíme se vnějším (vzdálenějším) kolem, které má delší dráhu a vyšší přesnost
+    const outerTarget = Math.max(leftDistTarget, rightDistTarget);
+    const outerTraveled = targetAngle > 0 ? traveledRight : traveledLeft;
 
-    if (finished) {
-      console.log(`Oblouk dokončen. Koncový úhel: ${currentAngle.toFixed(1)} ° (cíl ${targetAbs.toFixed(1)}°)`);
+    if (outerTraveled >= outerTarget) {
+      console.log(`Oblouk podle enkodéru dokončen. Ujeto L: ${traveledLeft.toFixed(0)} mm (cíl ${leftDistTarget.toFixed(0)}), R: ${traveledRight.toFixed(0)} mm (cíl ${rightDistTarget.toFixed(0)})`);
       break;
     }
 
@@ -340,11 +354,35 @@ export async function driveArc(
     const now = Date.now();
     if (now - lastLogTime > 100) {
       lastLogTime = now;
-      console.log(`Oblouk: úhel ${currentAngle.toFixed(1)}° / cíl ${targetAbs.toFixed(1)}° | L: ${leftSpeed.toFixed(0)} mm/s, R: ${rightSpeed.toFixed(0)} mm/s`);
+      console.log(`Oblouk: Ujeto L: ${traveledLeft.toFixed(0)}/${leftDistTarget.toFixed(0)} mm | R: ${traveledRight.toFixed(0)}/${rightDistTarget.toFixed(0)} mm | Gyro: ${angleState.angleZ.toFixed(1)}°`);
     }
 
     await sleep(10);
   }
 
-  // Konec pohybu - bez zastavení a bez sleep pro plynulý přechod na další stav
+  // Zastavíme a zabrzdíme motory pro přesné změření konečného úhlu gyroskopem
+  try {
+    await robutek.stop(true);
+    await sleep(50);
+  } catch (e) {}
+
+  // Gyroskopická kontrola a případná drobná korekce (dorovnání)
+  const finalAngle = angleState.angleZ;
+  const error = targetAbs - finalAngle; // Zbývající odchylka v stupních
+
+  if (Math.abs(error) > 2.5) {
+    console.log(`Dorovnávám odchylku oblouku o ${error.toFixed(1)}° na místě pomocí gyroskopu...`);
+    await rotateAngle(
+      robutek,
+      angleState,
+      error,
+      120, // Rychlost otáčení pro dorovnání (SPEED_TURN)
+      emergencyPin,
+      leds,
+      emergencyStopCallback,
+      isEmergencyLatched
+    );
+  } else {
+    console.log(`Oblouk přesný, odchylka jen ${error.toFixed(1)}°. Není třeba dorovnávat.`);
+  }
 }

@@ -358,8 +358,8 @@ async function getDistance(sensor: VL53L0X | null): Promise<number> {
 function updateSensorLeds(front: number, left: number): void {
   if (emergencyLatched) return;
 
-  // LED 0 (první): Přední senzor (hranice 20 cm = 200 mm)
-  if (front <= 200) {
+  // LED 0 (první): Přední senzor (hranice 40 cm = 400 mm)
+  if (front <= 400) {
     leds.set(0, 0x300000); // Červená (překážka nablízku)
   } else {
     leds.set(0, 0x003000); // Zelená (volno)
@@ -409,7 +409,7 @@ async function jedem(): Promise<void> {
         emergencyStop,
         () => emergencyLatched
       );
-    } else if (front > DIST_THRESHOLD) {
+    } else if (front > 400) {
       console.log("-> Vepředu volno (vlevo zeď): jedu rovně");
       // Jedeme rovně, dokud se neuvolní levá strana (s ohledem na 5s limit) nebo se nezablokuje předek
       await driveStraight(
@@ -431,7 +431,7 @@ async function jedem(): Promise<void> {
           updateSensorLeds(currFront, currLeft);
           
           const stopForLeft = (currLeft > DIST_THRESHOLD) && (Date.now() - lastLeftArcTime > 5000);
-          const stopForFront = (currFront <= DIST_THRESHOLD);
+          const stopForFront = (currFront <= 400);
           
           return (stopForLeft || stopForFront);
         }
