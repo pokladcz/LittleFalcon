@@ -111,6 +111,8 @@ let gyroZ_dps = 0;
 let lastTime = 0;
 let intervalId: number | null = null;
 let emergencyLatched = false;
+let driveStartTime = 0;
+
 
 // -------------------- PARAMETRY JÍZDY --------------------
 const SPEED_NORMAL = 270;
