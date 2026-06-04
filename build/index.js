@@ -4,7 +4,7 @@ import { VL53L0X } from "./libs/VL53L0X.js";
 import { Servo } from "./libs/servo.js";
 import { SmartLed, LED_WS2812B } from "smartled";
 import * as gpio from "gpio";
-import { driveStraight, rotateAngle, driveArc } from "./libs/drive.js";
+import { driveStraight, driveArc } from "./libs/drive.js";
 // ======================================================
 // TEST JÍZDY ROVNĚ 1 METR POMOCÍ GYROSKOPU
 // - Robot po stisku tlačítka IO2 uzamkne aktuální směr
@@ -323,12 +323,11 @@ async function jedem() {
         const front = await getDistance(lidar);
         console.log(`[jedem] Leve: ${left.toFixed(0)} mm | Predni: ${front.toFixed(0)} mm`);
         if (left > DIST_THRESHOLD) {
-            console.log("-> Vlevo volno: otáčím 90° doleva");
-            await rotateAngle(robutek, angleState, 90, SPEED_TURN, EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
-            if (emergencyLatched)
-                return;
-            console.log("-> Popojíždím 200 mm rovně z rohu...");
-            await driveStraight(robutek, gyro, gyroZOffset, 200, SPEED_NORMAL, EMERGENCY_BUTTON_PIN, angleState, leds, emergencyStop, () => emergencyLatched);
+            console.log("-> Vlevo volno: zatáčím plynulým obloukem 90° vlevo (R=140 mm)");
+            await driveArc(robutek, angleState, 140, // poloměr 14 cm = 140 mm
+            90, // 90 stupňů vlevo
+            216, // rychlost 216 mm/s
+            EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
         }
         else if (front > DIST_THRESHOLD) {
             console.log("-> Vepředu volno (vlevo zeď): jedu rovně");
@@ -342,8 +341,11 @@ async function jedem() {
             });
         }
         else {
-            console.log("-> Zablokováno (vlevo zeď, vepředu zeď): otáčím 90° doprava");
-            await rotateAngle(robutek, angleState, -90, SPEED_TURN, EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
+            console.log("-> Zablokováno (vlevo zeď, vepředu zeď): zatáčím plynulým obloukem 90° vpravo (R=140 mm)");
+            await driveArc(robutek, angleState, 140, // poloměr 14 cm = 140 mm
+            -90, // 90 stupňů vpravo
+            216, // rychlost 216 mm/s
+            EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
         }
         await sleep(20);
     }
@@ -352,24 +354,7 @@ async function jedem() {
 async function runSequence() {
     setServoAngle(ANGLE_CENTER);
     await sleep(100);
-    // Zakomentováno sledování zdi pro testování radiusů
-    // await jedem();
-    // Testovací radiusy podle požadavku uživatele:
-    // 1. Zatáčka 90 stupňů vlevo (CCW) s poloměrem 14 cm (140 mm) při rychlosti 216 mm/s (zvýšeno o 20 %)
-    console.log("=== TEST OBLOUKU: 90° vlevo, poloměr 14 cm, rychlost 216 mm/s ===");
-    await driveArc(robutek, angleState, 140, // poloměr 140 mm = 14 cm
-    90, // 90 stupňů vlevo
-    216, // rychlost 216 mm/s (zvýšeno o 20 %)
-    EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
-    if (emergencyLatched)
-        return;
-    await sleep(1000); // Pauza mezi oblouky
-    // 2. Zatáčka 90 stupňů vpravo (CW) s poloměrem 14 cm (140 mm) při rychlosti 216 mm/s (zvýšeno o 20 %)
-    console.log("=== TEST OBLOUKU: 90° vpravo, poloměr 14 cm, rychlost 216 mm/s ===");
-    await driveArc(robutek, angleState, 140, // poloměr 140 mm = 14 cm
-    -90, // 90 stupňů vpravo
-    216, // rychlost 216 mm/s (zvýšeno o 20 %)
-    EMERGENCY_BUTTON_PIN, leds, emergencyStop, () => emergencyLatched);
+    await jedem();
 }
 // -------------------- MAIN --------------------
 async function main() {
