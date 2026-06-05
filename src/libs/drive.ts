@@ -224,7 +224,7 @@ export async function rotateAngle(
   } catch (e) {}
 
   setAllLeds(PURPLE); // Hotovo
-  await sleep(300); // Krátká pauza na uklidnění po otočení
+  await sleep(50); // Zkráceno z 300 ms na 50 ms pro rychlejší reakci
 }
 
 /**
@@ -365,31 +365,7 @@ export async function driveArc(
     await sleep(10);
   }
 
-  // Zastavíme a zabrzdíme motory pro přesné změření konečného úhlu gyroskopem
-  try {
-    robutek.leftMotor.setRamp(0);
-    robutek.rightMotor.setRamp(0);
-    await robutek.stop(true);
-    await sleep(15);
-  } catch (e) {}
-
-  // Gyroskopická kontrola a případná drobná korekce (dorovnání)
-  const finalAngle = angleState.angleZ;
-  const error = targetAbs - finalAngle; // Zbývající odchylka v stupních
-
-  if (Math.abs(error) > 2.5) {
-    console.log(`Dorovnávám odchylku oblouku o ${error.toFixed(1)}° na místě pomocí gyroskopu...`);
-    await rotateAngle(
-      robutek,
-      angleState,
-      error,
-      120, // Rychlost otáčení pro dorovnání (SPEED_TURN)
-      emergencyPin,
-      leds,
-      emergencyStopCallback,
-      isEmergencyLatched
-    );
-  } else {
-    console.log(`Oblouk přesný, odchylka jen ${error.toFixed(1)}°. Není třeba dorovnávat.`);
-  }
+  // Pro plynulou jízdu bez zastavení na konci oblouku neprovádíme stop ani gyroskopické dorovnávání na místě.
+  // Pouze necháme motory běžet, dokud je nepřevezme další stav řízení (např. jízda rovně).
+  console.log(`Oblouk dokončen, pokračuji plynule dál.`);
 }
