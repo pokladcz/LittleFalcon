@@ -4,6 +4,11 @@
     "module": "es2022",
     "lib": ["es2023"],
     "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
+    "strict": false,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "noImplicitThis": false,
     "sourceMap": false,
     "outDir": "build",
     "rootDir": "src"

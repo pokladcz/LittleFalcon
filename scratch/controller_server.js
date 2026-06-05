@@ -114,6 +114,14 @@ server.on('upgrade', (req, socket, head) => {
                                 });
                                 udpClient.send(packet, 0, packet.length, ROBOT_PORT, robotIp);
                             }
+                        } else if (msg.type === 'led') {
+                            if (robotIp) {
+                                const packet = JSON.stringify({
+                                    type: 'led',
+                                    state: msg.state
+                                });
+                                udpClient.send(packet, 0, packet.length, ROBOT_PORT, robotIp);
+                            }
                         }
                     } catch (e) {
                         // Ignore JSON parsing errors for safety

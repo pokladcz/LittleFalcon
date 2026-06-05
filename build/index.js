@@ -45,6 +45,13 @@ async function stopRobot() {
 function setServoAngle(angle) {
     servo.write(Math.round((angle / 180) * 1023));
 }
+function setAllLeds(color) {
+    leds.clear();
+    for (let i = 0; i < LED_COUNT; i++) {
+        leds.set(i, color);
+    }
+    leds.show();
+}
 // Nouzový stop mechanismus
 let emergencyLatched = false;
 async function emergencyStop() {
@@ -133,6 +140,7 @@ let laptopIp = "";
 let laptopPort = 0;
 let driveEnabled = false; // Příznak pro aktivaci ručního pohonu
 let selectedMode = null; // Zvolený režim
+let ledState = false; // Ručně ovládaný stav LED pásku
 // ==========================================
 // 🎮 RUČNÍ REŽIM: WebSocket / UDP OVLÁDÁNÍ
 // ==========================================
@@ -145,6 +153,8 @@ async function startUdpServer() {
         port: 4444,
         onReadable: (avail) => {
             lastPacketTime = Date.now();
+            if (!udpSocket)
+                return;
             while (avail > 0) {
                 const dgram = udpSocket.read();
                 if (!dgram)
@@ -158,40 +168,45 @@ async function startUdpServer() {
                         str += String.fromCharCode(arr[i]);
                     }
                     const msg = JSON.parse(str);
-                    const speed = Number(msg.speed);
-                    const steer = Number(msg.steer);
-                    // Výpis stavu ovladače do terminálu (omezen na každých 300 ms)
-                    const now = Date.now();
-                    if (now - lastPrintTime > 300) {
-                        const speedPct = Math.round((speed / 700) * 100);
-                        const steerPct = Math.round(steer * 100);
-                        let dirStr = "Stojí";
-                        if (speed > 5) {
-                            const rtVal = (speed / 700).toFixed(2);
-                            dirStr = `Vpřed ${speedPct}% (RT=${rtVal})`;
-                        }
-                        else if (speed < -5) {
-                            const ltVal = (Math.abs(speed) / 400).toFixed(2);
-                            dirStr = `Vzad ${Math.abs(speedPct)}% (LT=${ltVal})`;
-                        }
-                        let steerStr = "Rovně";
-                        if (steer > 0.05) {
-                            steerStr = `Vpravo ${steerPct}% (Stick=${steer.toFixed(2)})`;
-                        }
-                        else if (steer < -0.05) {
-                            steerStr = `Vlevo ${Math.abs(steerPct)}% (Stick=${steer.toFixed(2)})`;
-                        }
-                        console.log(`Ovladač -> Rychlost: ${dirStr} | Zatáčení: ${steerStr}`);
-                        lastPrintTime = now;
-                    }
-                    // Nastavení motorů
-                    if (driveEnabled) {
-                        robutek.setSpeed(speed);
-                        robutek.move(CURVE_SIGN * steer);
+                    if (msg.type === "led") {
+                        ledState = !!msg.state;
                     }
                     else {
-                        robutek.setSpeed(0);
-                        robutek.stop(true);
+                        const speed = Number(msg.speed);
+                        const steer = Number(msg.steer);
+                        // Výpis stavu ovladače do terminálu (omezen na každých 300 ms)
+                        const now = Date.now();
+                        if (now - lastPrintTime > 300) {
+                            const speedPct = Math.round((speed / 700) * 100);
+                            const steerPct = Math.round(steer * 100);
+                            let dirStr = "Stojí";
+                            if (speed > 5) {
+                                const rtVal = (speed / 700).toFixed(2);
+                                dirStr = `Vpřed ${speedPct}% (RT=${rtVal})`;
+                            }
+                            else if (speed < -5) {
+                                const ltVal = (Math.abs(speed) / 400).toFixed(2);
+                                dirStr = `Vzad ${Math.abs(speedPct)}% (LT=${ltVal})`;
+                            }
+                            let steerStr = "Rovně";
+                            if (steer > 0.05) {
+                                steerStr = `Vpravo ${steerPct}% (Stick=${steer.toFixed(2)})`;
+                            }
+                            else if (steer < -0.05) {
+                                steerStr = `Vlevo ${Math.abs(steerPct)}% (Stick=${steer.toFixed(2)})`;
+                            }
+                            console.log(`Ovladač -> Rychlost: ${dirStr} | Zatáčení: ${steerStr}`);
+                            lastPrintTime = now;
+                        }
+                        // Nastavení motorů
+                        if (driveEnabled) {
+                            robutek.setSpeed(speed);
+                            robutek.move(CURVE_SIGN * steer);
+                        }
+                        else {
+                            robutek.setSpeed(0);
+                            robutek.stop(true);
+                        }
                     }
                 }
                 catch (e) {
@@ -365,20 +380,25 @@ async function main() {
     }
     // Inicializace I2C2 pro gyroskop/akcelerometr
     try {
-        I2C2.setup({
-            sda: I2C2_SDA,
-            scl: I2C2_SCL,
-            bitrate: 400000,
-        });
-        console.log("I2C2 sběrnice nastavena.");
-        gyro = new MPU6050(I2C2);
-        if (gyro.probe()) {
-            gyro.init();
-            console.log("MPU6050 gyroskop úspěšně inicializován.");
+        if (I2C2) {
+            I2C2.setup({
+                sda: I2C2_SDA,
+                scl: I2C2_SCL,
+                bitrate: 400000,
+            });
+            console.log("I2C2 sběrnice nastavena.");
+            gyro = new MPU6050(I2C2);
+            if (gyro.probe()) {
+                gyro.init();
+                console.log("MPU6050 gyroskop úspěšně inicializován.");
+            }
+            else {
+                gyro = null;
+                console.log("MPU6050 gyroskop nebyl nalezen.");
+            }
         }
         else {
-            gyro = null;
-            console.log("MPU6050 gyroskop nebyl nalezen.");
+            console.log("I2C2 sběrnice není dostupná.");
         }
     }
     catch (e) {
@@ -435,23 +455,10 @@ async function main() {
                     leds.set(i, RED);
                 }
             }
-            else if (latency > 250) {
-                leds.set(0, YELLOW);
-                leds.set(1, YELLOW);
-            }
-            else if (latency > 120) {
-                for (let i = 0; i < 4; i++) {
-                    leds.set(i, YELLOW);
-                }
-            }
-            else if (latency > 60) {
-                for (let i = 0; i < 6; i++) {
-                    leds.set(i, GREEN);
-                }
-            }
             else {
-                for (let i = 0; i < 8; i++) {
-                    leds.set(i, GREEN);
+                const color = ledState ? GREEN : OFF;
+                for (let i = 0; i < LED_COUNT; i++) {
+                    leds.set(i, color);
                 }
             }
             leds.show();
@@ -496,28 +503,43 @@ async function main() {
         robutek.setRamp(RAMP_AUTO);
         // Inicializace I2C1 sběrnice pro levý Lidar
         try {
-            I2C1.setup({
-                sda: 4,
-                scl: 5,
-                bitrate: 400000,
-            });
-            console.log("I2C1 sběrnice nastavena.");
+            if (I2C1) {
+                I2C1.setup({
+                    sda: 4,
+                    scl: 5,
+                    bitrate: 400000,
+                });
+                console.log("I2C1 sběrnice nastavena.");
+            }
+            else {
+                console.log("I2C1 sběrnice není dostupná.");
+            }
         }
         catch (e) {
             console.log("Chyba I2C1: " + e);
         }
         // Přední Lidar (na I2C2)
         try {
-            lidar = new VL53L0X(I2C2);
-            console.log("Přední Lidar VL53L0X (I2C2) připojen.");
+            if (I2C2) {
+                lidar = new VL53L0X(I2C2);
+                console.log("Přední Lidar VL53L0X (I2C2) připojen.");
+            }
+            else {
+                console.log("Chyba Přední Lidar (I2C2): I2C2 není dostupný.");
+            }
         }
         catch (e) {
             console.log("Chyba Přední Lidar (I2C2): " + e);
         }
         // Levý Lidar (na I2C1)
         try {
-            leftLidar = new VL53L0X(I2C1);
-            console.log("Levý Lidar VL53L0X (I2C1) připojen.");
+            if (I2C1) {
+                leftLidar = new VL53L0X(I2C1);
+                console.log("Levý Lidar VL53L0X (I2C1) připojen.");
+            }
+            else {
+                console.log("Chyba Levý Lidar (I2C1): I2C1 není dostupný.");
+            }
         }
         catch (e) {
             console.log("Chyba Levý Lidar (I2C1): " + e);
