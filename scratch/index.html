@@ -4,375 +4,75 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LittleFalcon - Manuální Ovládání</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg-color: #0b0f19;
-            --card-bg: rgba(20, 30, 55, 0.6);
-            --accent-color: #3b82f6;
-            --accent-glow: rgba(59, 130, 246, 0.4);
-            --text-color: #f3f4f6;
-            --text-dim: #9ca3af;
-            --success: #10b981;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Outfit', sans-serif;
-            background-color: var(--bg-color);
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.2) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(17, 24, 39, 0.5) 0px, transparent 50%);
-            color: var(--text-color);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 2rem;
-            overflow-x: hidden;
-        }
-
-        h1 {
-            font-size: 2.5rem;
-            font-weight: 800;
-            background: linear-gradient(to right, #60a5fa, #3b82f6, #1d4ed8);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 0.5rem;
-            text-align: center;
-            letter-spacing: -0.05em;
-        }
-
-        .subtitle {
-            color: var(--text-dim);
-            font-size: 1rem;
-            margin-bottom: 2rem;
-            text-align: center;
-        }
-
-        .dashboard {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-            max-width: 1000px;
-            width: 100%;
-        }
-
-        @media (max-width: 768px) {
-            .dashboard {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-        }
-
-        .card-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            padding-bottom: 0.5rem;
-        }
-
-        /* Input control styles */
-        .form-group {
-            margin-bottom: 1rem;
-        }
-
-        label {
-            display: block;
-            font-size: 0.875rem;
-            color: var(--text-dim);
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        input {
-            width: 100%;
-            background: rgba(15, 23, 42, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
-            color: var(--text-color);
-            font-size: 1rem;
-            font-family: inherit;
-            transition: all 0.3s ease;
-        }
-
-        input:focus {
-            outline: none;
-            border-color: var(--accent-color);
-            box-shadow: 0 0 0 3px var(--accent-glow);
-        }
-
-        .btn {
-            width: 100%;
-            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 0.75rem;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3);
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(29, 78, 216, 0.4);
-        }
-
-        .btn:active {
-            transform: translateY(0);
-        }
-
-        /* Status indicators */
-        .status-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.75rem 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-        }
-
-        .status-item:last-child {
-            border-bottom: none;
-        }
-
-        .badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.875rem;
-            font-weight: 600;
-        }
-
-        .badge-disconnected {
-            background-color: rgba(239, 68, 68, 0.15);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-
-        .badge-connected {
-            background-color: rgba(16, 185, 129, 0.15);
-            color: var(--success);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-
-        /* Controller visualizer */
-        .joystick-container {
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            margin-top: 1.5rem;
-        }
-
-        .joystick-box {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .joystick-ring {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            background: rgba(15, 23, 42, 0.6);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            position: relative;
-            box-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.5);
-        }
-
-        .joystick-dot {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #60a5fa, #2563eb);
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-            transition: left 0.05s ease, top 0.05s ease;
-        }
-
-        /* Progress bars for values */
-        .value-bar-container {
-            margin-top: 1rem;
-        }
-
-        .value-label {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.875rem;
-            margin-bottom: 0.25rem;
-        }
-
-        .bar-outer {
-            width: 100%;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 4px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .bar-inner {
-            height: 100%;
-            background: var(--accent-color);
-            border-radius: 4px;
-            width: 0%;
-            transition: width 0.1s ease;
-        }
-
-        .bar-inner.negative {
-            background: var(--warning);
-        }
-
-        /* Console log output */
-        .console {
-            grid-column: 1 / -1;
-            background: rgba(10, 15, 30, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 1rem;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 0.875rem;
-            height: 150px;
-            overflow-y: auto;
-            color: #34d399;
-            box-shadow: inset 0 4px 12px rgba(0,0,0,0.8);
-        }
-
-        .console-line {
-            margin-bottom: 0.25rem;
-            opacity: 0.85;
-        }
-        
-        .console-line.error {
-            color: var(--danger);
-        }
-        
-        .console-line.success {
-            color: var(--success);
-        }
+        :root { --bg: #0b0f19; --card: rgba(20, 30, 55, 0.6); --accent: #3b82f6; --text: #f3f4f6; --dim: #9ca3af; --success: #10b981; --danger: #ef4444; --warning: #f59e0b; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 2rem; }
+        h1 { font-size: 2.5rem; font-weight: 800; background: linear-gradient(to right, #60a5fa, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem; }
+        .subtitle { color: var(--dim); margin-bottom: 2rem; }
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; max-width: 1000px; width: 100%; }
+        .card { background: var(--card); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 1.5rem; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+        .card-title { font-size: 1.2rem; font-weight: 600; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem; }
+        input { width: 100%; background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.75rem; color: var(--text); margin: 0.5rem 0 1rem; }
+        .btn { width: 100%; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; border: none; border-radius: 8px; padding: 0.75rem; font-weight: 600; cursor: pointer; }
+        .status-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.85rem; font-weight: 600; }
+        .badge-disconnected { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
+        .badge-connected { background: rgba(16,185,129,0.15); color: var(--success); border: 1px solid rgba(16,185,129,0.3); }
+        .bar-outer { width: 100%; height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; margin: 0.25rem 0 1rem; }
+        .bar-inner { height: 100%; background: var(--accent); width: 0%; transition: width 0.08s ease; }
+        .bar-inner.negative { background: var(--warning); }
+        .joystick-ring { width: 100px; height: 100px; border-radius: 50%; background: rgba(0,0,0,0.3); border: 2px dashed rgba(255,255,255,0.15); position: relative; margin: 1rem auto 0; }
+        .joystick-dot { width: 18px; height: 18px; border-radius: 50%; background: #10b981; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); transition: all 0.08s ease; box-shadow: 0 0 8px #10b981; }
+        .console { grid-column: 1 / -1; background: rgba(10,15,30,0.9); border-radius: 12px; padding: 1rem; font-family: monospace; height: 120px; overflow-y: auto; color: #34d399; }
     </style>
 </head>
 <body>
 
     <h1>🚀 LittleFalcon</h1>
-    <div class="subtitle">Xbox Controller & WebSocket/UDP Ovládací Panel</div>
+    <div class="subtitle">Xbox Controller & Telemetrický Dashboard</div>
 
     <div class="dashboard">
-        
         <!-- Connection Card -->
         <div class="card">
             <div class="card-title">🔌 Připojení k Robotu</div>
-            
-            <div class="form-group">
-                <label for="robotIp">IP adresa robota (ze serial monitoru)</label>
-                <input type="text" id="robotIp" placeholder="např. 192.168.137.123" value="192.168.137.">
+            <label>IP Adresa Robota:</label>
+            <input type="text" id="robotIp" value="192.168.137.">
+            <button class="btn" id="connectBtn">Připojit Server</button>
+            <div class="status-item" style="margin-top: 1rem;">
+                <span>Server WS:</span>
+                <span class="badge badge-disconnected" id="wsStatus">Odpojeno</span>
             </div>
-
-            <button class="btn" id="connectBtn">Připojit WebSocket Server</button>
-
-            <div style="margin-top: 1.5rem;">
-                <div class="status-item">
-                    <span>Laptop Server WS:</span>
-                    <span class="badge badge-disconnected" id="wsStatus">Odpojeno</span>
-                </div>
-                <div class="status-item">
-                    <span>Xbox Ovladač:</span>
-                    <span class="badge badge-disconnected" id="gamepadStatus">Nenalezen</span>
-                </div>
+            <div class="status-item">
+                <span>Xbox Ovladač:</span>
+                <span class="badge badge-disconnected" id="gamepadStatus">Nenalezen</span>
             </div>
+        </div>
+
+        <!-- Controller Diagnostics -->
+        <div class="card">
+            <div class="card-title">🎮 Stav Ovladače</div>
+            <div>Rychlost (Speed): <span id="speedVal">0 mm/s</span></div>
+            <div class="bar-outer"><div class="bar-inner" id="speedBar"></div></div>
+            <div>Zatáčení (Steer): <span id="steerVal">0.00</span></div>
+            <div class="bar-outer"><div class="bar-inner" id="steerBar"></div></div>
+            <div class="joystick-ring"><div class="joystick-dot" id="rightStick"></div></div>
         </div>
 
         <!-- Telemetry Card -->
         <div class="card">
-            <div class="card-title">🎮 Diagnostika Ovladače</div>
-            
-            <div class="value-bar-container">
-                <div class="value-label">
-                    <span>Rychlost (Speed)</span>
-                    <span id="speedVal">0 mm/s</span>
-                </div>
-                <div class="bar-outer">
-                    <div class="bar-inner" id="speedBar"></div>
-                </div>
-            </div>
-
-            <div class="value-bar-container">
-                <div class="value-label">
-                    <span>Zatáčení (Steer / Curve)</span>
-                    <span id="steerVal">0.00</span>
-                </div>
-                <div class="bar-outer">
-                    <div class="bar-inner" id="steerBar"></div>
-                </div>
-            </div>
-
-            <div class="joystick-container">
-                <div class="joystick-box">
-                    <span style="font-size: 0.8rem; color: var(--text-dim)">Pravá Páčka (Zatáčení)</span>
-                    <div class="joystick-ring">
-                        <div class="joystick-dot" id="rightStick"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Telemetry Card (Accelerometer) -->
-        <div class="card">
             <div class="card-title">📡 Telemetrie (Akcelerometr)</div>
-            
-            <div class="status-item">
-                <span>Předozadní náklon (Osa X):</span>
-                <span id="accelX" style="font-weight: 600;">0.00 g</span>
-            </div>
-            <div class="status-item">
-                <span>Boční náklon (Osa Y):</span>
-                <span id="accelY" style="font-weight: 600;">0.00 g</span>
-            </div>
-            <div class="status-item">
-                <span>Svislé zrychlení (Osa Z):</span>
-                <span id="accelZ" style="font-weight: 600;">0.00 g</span>
-            </div>
-
-            <div style="display: flex; justify-content: center; margin-top: 1rem;">
-                <div style="width: 100px; height: 100px; border-radius: 50%; border: 2px dashed rgba(255,255,255,0.15); position: relative; background: rgba(0,0,0,0.3); box-shadow: inset 0 4px 10px rgba(0,0,0,0.5);">
-                    <div id="tiltBubble" style="width: 18px; height: 18px; border-radius: 50%; background: #10b981; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); transition: all 0.08s ease; box-shadow: 0 0 8px #10b981;"></div>
-                </div>
-            </div>
+            <div class="status-item"><span>Osa X (Náklon):</span><span id="accelX">0.00 g</span></div>
+            <div class="status-item"><span>Osa Y (Náklon):</span><span id="accelY">0.00 g</span></div>
+            <div class="status-item"><span>Osa Z (Svislé):</span><span id="accelZ">0.00 g</span></div>
+            <div class="joystick-ring"><div class="joystick-dot" id="tiltBubble" style="background:#10b981; box-shadow:0 0 8px #10b981;"></div></div>
         </div>
 
-        <!-- Realtime Console logs -->
+        <!-- Console logs -->
         <div class="console" id="consoleBox">
-            <div class="console-line success">Log spuštěn. Připojte Xbox ovladač stisknutím libovolného tlačítka.</div>
+            <div>Log spuštěn. Připojte Xbox ovladač stisknutím libovolného tlačítka.</div>
         </div>
-
     </div>
 
     <script>
@@ -380,210 +80,105 @@
         const connectBtn = document.getElementById('connectBtn');
         const wsStatus = document.getElementById('wsStatus');
         const gamepadStatus = document.getElementById('gamepadStatus');
-        
-        const speedVal = document.getElementById('speedVal');
-        const speedBar = document.getElementById('speedBar');
-        const steerVal = document.getElementById('steerVal');
-        const steerBar = document.getElementById('steerBar');
-        const rightStick = document.getElementById('rightStick');
-        
+        const speedVal = document.getElementById('speedVal'), speedBar = document.getElementById('speedBar');
+        const steerVal = document.getElementById('steerVal'), steerBar = document.getElementById('steerBar');
+        const rightStick = document.getElementById('rightStick'), tiltBubble = document.getElementById('tiltBubble');
         const consoleBox = document.getElementById('consoleBox');
 
-        let ws = null;
-        let isWsConnected = false;
-        let gamepadIndex = null;
-        let lastSentData = { speed: 0, steer: 0 };
+        let ws = null, isWsConnected = false, gamepadIndex = null, lastSent = { speed: 0, steer: 0 }, lastSendTime = 0;
 
-        // Načteme poslední uloženou IP adresu
         const savedIp = localStorage.getItem('robotIp');
-        if (savedIp) {
-            robotIpInput.value = savedIp;
-        }
+        if (savedIp) robotIpInput.value = savedIp;
 
-        function logToConsole(text, type = '') {
+        function log(txt, type = '') {
             const line = document.createElement('div');
-            line.className = `console-line ${type}`;
-            line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            line.style.color = type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--success)' : '';
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${txt}`;
             consoleBox.appendChild(line);
             consoleBox.scrollTop = consoleBox.scrollHeight;
         }
 
-        // Připojení WebSocketu k lokálnímu serveru
-        function connectWebSocket() {
+        connectBtn.addEventListener('click', () => {
             const ip = robotIpInput.value.trim();
-            if (!ip || ip === "192.168.137.") {
-                logToConsole("Chyba: Zadejte platnou IP adresu robota!", "error");
-                return;
-            }
+            if (!ip || ip === "192.168.137.") return log("Zadejte platnou IP adresu!", "error");
             localStorage.setItem('robotIp', ip);
+            if (ws) ws.close();
 
-            if (ws) {
-                ws.close();
-            }
-
-            logToConsole(`Připojuji se k lokálnímu serveru ws://${window.location.hostname || 'localhost'}:3000...`);
+            log("Připojování k serveru...");
+            ws = new WebSocket(`ws://${window.location.host || 'localhost:3000'}`);
             
-            // Lokální server běží na stejném hostiteli na portu 3000 (upgrade websocketu)
-            const wsUrl = `ws://${window.location.host || 'localhost:3000'}`;
-            ws = new WebSocket(wsUrl);
-
             ws.onopen = () => {
                 isWsConnected = true;
                 wsStatus.textContent = "Připojeno";
                 wsStatus.className = "badge badge-connected";
-                logToConsole("Úspěšně připojeno k lokálnímu serveru!", "success");
-                
-                // Pošleme IP adresu robota na server
-                ws.send(JSON.stringify({ type: 'connect', ip: ip }));
-                logToConsole(`Nastaven cíl UDP na IP: ${ip}`, "success");
+                ws.send(JSON.stringify({ type: 'connect', ip }));
+                log("Připojeno k serveru, cíl nastaven.", "success");
             };
-
             ws.onclose = () => {
                 isWsConnected = false;
                 wsStatus.textContent = "Odpojeno";
                 wsStatus.className = "badge badge-disconnected";
-                logToConsole("Spojení s lokálním serverem ztraceno.", "error");
+                log("Server odpojen.", "error");
             };
-
-            ws.onmessage = (event) => {
+            ws.onmessage = (e) => {
                 try {
-                    const data = JSON.parse(event.data);
+                    const data = JSON.parse(e.data);
                     if (data.type === 'telemetry') {
-                        const ax = data.ax;
-                        const ay = data.ay;
-                        const az = data.az;
-                        
+                        const { ax, ay, az } = data;
                         document.getElementById('accelX').textContent = `${ax >= 0 ? '+' : ''}${ax.toFixed(2)} g`;
                         document.getElementById('accelY').textContent = `${ay >= 0 ? '+' : ''}${ay.toFixed(2)} g`;
                         document.getElementById('accelZ').textContent = `${az >= 0 ? '+' : ''}${az.toFixed(2)} g`;
                         
-                        // Bubble position mapping
-                        const bubbleClamp = (val, min, max) => Math.min(Math.max(val, min), max);
-                        const xOffset = bubbleClamp(ay * -40, -40, 40);
-                        const yOffset = bubbleClamp(ax * 40, -40, 40);
+                        const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+                        tiltBubble.style.transform = `translate(calc(-50% + ${clamp(ay * -38, -38, 38)}px), calc(-50% + ${clamp(ax * 38, -38, 38)}px))`;
                         
-                        const bubble = document.getElementById('tiltBubble');
-                        bubble.style.transform = `translate(calc(-50% + ${xOffset}px), calc(-50% + ${yOffset}px))`;
-                        
-                        // Change color on high acceleration (collision/shock)
                         const totalG = Math.sqrt(ax*ax + ay*ay + az*az);
-                        if (totalG > 1.4) {
-                            bubble.style.background = '#ef4444';
-                            bubble.style.boxShadow = '0 0 12px #ef4444';
-                        } else {
-                            bubble.style.background = '#10b981';
-                            bubble.style.boxShadow = '0 0 8px #10b981';
-                        }
+                        tiltBubble.style.background = totalG > 1.4 ? 'var(--danger)' : 'var(--success)';
                     }
-                } catch (e) {
-                    // Ignore errors
-                }
+                } catch (err) {}
             };
+        });
 
-            ws.onerror = (err) => {
-                logToConsole(`WebSocket chyba: ${err.message}`, "error");
-            };
-        }
-
-        connectBtn.addEventListener('click', connectWebSocket);
-
-        // Gamepad API
         window.addEventListener("gamepadconnected", (e) => {
             gamepadIndex = e.gamepad.index;
             gamepadStatus.textContent = "Aktivní";
             gamepadStatus.className = "badge badge-connected";
-            logToConsole(`Gamepad připojen: ${e.gamepad.id}`, "success");
+            log("Gamepad připojen: " + e.gamepad.id, "success");
+        });
+        window.addEventListener("gamepaddisconnected", () => {
+            gamepadIndex = null;
+            gamepadStatus.textContent = "Nenalezen";
+            gamepadStatus.className = "badge badge-disconnected";
+            log("Gamepad odpojen.", "error");
         });
 
-        window.addEventListener("gamepaddisconnected", (e) => {
-            if (gamepadIndex === e.gamepad.index) {
-                gamepadIndex = null;
-                gamepadStatus.textContent = "Nenalezen";
-                gamepadStatus.className = "badge badge-disconnected";
-                logToConsole("Gamepad odpojen.", "error");
-            }
-        });
-
-        // Loop pro čtení gamepadu a odesílání příkazů (60 fps)
         function updateLoop() {
             if (gamepadIndex !== null) {
                 const gp = navigator.getGamepads()[gamepadIndex];
                 if (gp) {
-                    // Xbox layout standard:
-                    // Axes: 2 = Right Stick X, 3 = Right Stick Y
-                    // Buttons: 6 = LT (Left Trigger), 7 = RT (Right Trigger)
-                    
-                    const rightStickX = gp.axes[2];
-                    const rightStickY = gp.axes[3];
-                    const lt = gp.buttons[6].value; // 0.0 až 1.0
-                    const rt = gp.buttons[7].value; // 0.0 až 1.0
+                    const rx = gp.axes[2], ry = gp.axes[3], lt = gp.buttons[6].value, rt = gp.buttons[7].value;
+                    let steer = Math.abs(rx) < 0.06 ? 0 : rx;
+                    let speed = rt > 0.05 ? Math.round(rt * 700) : lt > 0.05 ? Math.round(-lt * 400) : 0;
 
-                    // Zatáčení (steer) na pravou páčku
-                    let steer = rightStickX;
-                    const steerDeadzone = 0.06;
-                    if (Math.abs(steer) < steerDeadzone) {
-                        steer = 0;
-                    }
-                    
-                    // Rychlost (speed)
-                    // RT jede dopředu (max 700 mm/s), LT jede dozadu (max -400 mm/s)
-                    let speed = 0;
-                    if (rt > 0.05) {
-                        speed = Math.round(rt * 700);
-                    } else if (lt > 0.05) {
-                        speed = Math.round(-lt * 400);
-                    }
-
-                    // Vizuální aktualizace pravé páčky
-                    const xOffset = rightStickX * 45;
-                    const yOffset = rightStickY * 45;
-                    rightStick.style.left = `calc(50% + ${xOffset}px)`;
-                    rightStick.style.top = `calc(50% + ${yOffset}px)`;
-
-                    // Speed display
+                    rightStick.style.transform = `translate(calc(-50% + ${rx * 35}px), calc(-50% + ${ry * 35}px))`;
                     speedVal.textContent = `${speed} mm/s`;
-                    if (speed >= 0) {
-                        speedBar.className = "bar-inner";
-                        speedBar.style.width = `${(speed / 700) * 100}%`;
-                    } else {
-                        speedBar.className = "bar-inner negative";
-                        speedBar.style.width = `${(Math.abs(speed) / 400) * 100}%`;
-                    }
-
-                    // Steer display
+                    speedBar.className = speed >= 0 ? "bar-inner" : "bar-inner negative";
+                    speedBar.style.width = `${(Math.abs(speed) / (speed >= 0 ? 700 : 400)) * 100}%`;
+                    
                     steerVal.textContent = steer.toFixed(2);
+                    steerBar.className = steer < 0 ? "bar-inner negative" : "bar-inner";
                     steerBar.style.width = `${Math.abs(steer) * 100}%`;
-                    if (steer < 0) {
-                        steerBar.className = "bar-inner negative";
-                    } else {
-                        steerBar.className = "bar-inner";
-                    }
 
-                    // Odesílání přes WebSocket s vyšší frekvencí pro plynulý signálový indikátor na robotu
-                    if (isWsConnected) {
-                        const speedDiff = Math.abs(speed - lastSentData.speed);
-                        const steerDiff = Math.abs(steer - lastSentData.steer);
-                        
-                        const now = Date.now();
-                        const timeSinceLast = now - (updateLoop.lastSendTime || 0);
-
-                        // Odesíláme při změně nebo alespoň každých 30 ms (cca 33 fps) pro plynulý signál
-                        if (speedDiff > 5 || steerDiff > 0.02 || timeSinceLast > 30) {
-                            ws.send(JSON.stringify({
-                                type: 'control',
-                                speed: speed,
-                                steer: steer
-                            }));
-                            lastSentData = { speed, steer };
-                            updateLoop.lastSendTime = now;
-                        }
+                    const now = Date.now();
+                    if (isWsConnected && (Math.abs(speed - lastSent.speed) > 5 || Math.abs(steer - lastSent.steer) > 0.02 || now - lastSendTime > 30)) {
+                        ws.send(JSON.stringify({ type: 'control', speed, steer }));
+                        lastSent = { speed, steer };
+                        lastSendTime = now;
                     }
                 }
             }
-            
             requestAnimationFrame(updateLoop);
         }
-        
         requestAnimationFrame(updateLoop);
     </script>
 </body>

@@ -33,18 +33,21 @@ export async function driveStraight(
   leds: any,
   emergencyStopCallback: () => Promise<void>,
   isEmergencyLatched: () => boolean,
-  shouldStopPredicate?: () => Promise<boolean>
+  shouldStopPredicate?: () => Promise<boolean>,
+  getLeftDistance?: () => number,
+  skipInitialStop = false
 ): Promise<void> {
   if (isEmergencyLatched()) return;
 
-  // Zastavíme předchozí pohyb a uvolníme motory pro nový start (předchází chybě Motor is already moving)
-  try {
-    robutek.leftMotor.setRamp(0);
-    robutek.rightMotor.setRamp(0);
-    await robutek.stop(true); // Aktivní brzdění pro rychlou deakceleraci
-    await sleep(15); // Krátká pauza na zprocesování stopu v systému (zabraňuje race condition)
-  } catch (e) {}
-
+  if (!skipInitialStop) {
+    // Zastavíme předchozí pohyb a uvolníme motory pro nový start (předchází chybě Motor is already moving)
+    try {
+      robutek.leftMotor.setRamp(0);
+      robutek.rightMotor.setRamp(0);
+      await robutek.stop(true); // Aktivní brzdění pro rychlou deakceleraci
+      await sleep(15); // Krátká pauza na zprocesování stopu v systému (zabraňuje race condition)
+    } catch (e) {}
+  }
   const GREEN = 0x003000;
   const PURPLE = 0x300030;
   
@@ -67,6 +70,7 @@ export async function driveStraight(
   let integral = 0;
   let lastError = 0;
   let lastTimeMs = Date.now();
+  let lastLogTime = 0;
 
   console.log(`Start jízdy rovně na ${distanceMm} mm. Rychlost: ${speed} mm/s. Cílový úhel: ${targetAngle.toFixed(1)} °`);
   setAllLeds(GREEN);
@@ -89,7 +93,11 @@ export async function driveStraight(
     const distRight = currentRight - startRight;
     const distTraveled = (distLeft + distRight) / 2; // v mm
 
-    console.log(`Ujeto: ${distTraveled.toFixed(0)} mm / ${distanceMm} mm | Úhel: ${angleState.angleZ.toFixed(1)} °`);
+    const nowLog = Date.now();
+    if (nowLog - lastLogTime > 150) {
+      lastLogTime = nowLog;
+      console.log(`Ujeto: ${distTraveled.toFixed(0)} mm / ${distanceMm} mm | Úhel: ${angleState.angleZ.toFixed(1)} °`);
+    }
 
     // Pokud ujedeme požadovanou vzdálenost, zastavíme
     if (distTraveled >= distanceMm) {
@@ -124,6 +132,22 @@ export async function driveStraight(
       // Snížené limity korekce na max ±0.06 pro velmi plynulé a neznatelné úpravy směru
       if (curve > 0.06) curve = 0.06;
       if (curve < -0.06) curve = -0.06;
+
+      // Korekce na levou stěnu - snažíme se být v ideální pozici 200 mm od levé stěny
+      if (getLeftDistance) {
+        const leftDist = getLeftDistance();
+        // Regulujeme pouze pokud stěnu skutečně vidíme (vzdálenost < 500 mm)
+        if (leftDist < 500) {
+          const wallError = leftDist - 200; // kladná = moc daleko, záporná = moc blízko
+          let wallCorrection = -wallError * 0.0005; // P-regulátor s koeficientem 0.0005
+          
+          // Omezíme korekci na bezpečné maximum/minimum [-0.035, 0.035]
+          if (wallCorrection > 0.035) wallCorrection = 0.035;
+          if (wallCorrection < -0.035) wallCorrection = -0.035;
+          
+          curve += wallCorrection;
+        }
+      }
 
       robutek.setSpeed(speed);
       robutek.move(curve); // Voláme bez await, abychom neblokovali event loop!
@@ -251,7 +275,6 @@ export async function driveArc(
   isEmergencyLatched: () => boolean
 ): Promise<void> {
   if (isEmergencyLatched()) return;
-
   // Zastavíme předchozí pohyb a uvolníme motory pro nový start (předchází chybě Motor is already moving)
   try {
     robutek.leftMotor.setRamp(0);
@@ -259,7 +282,6 @@ export async function driveArc(
     await robutek.stop(true); // Aktivní brzdění pro rychlou deakceleraci
     await sleep(15); // Krátká pauza na zprocesování stopu v systému (zabraňuje race condition)
   } catch (e) {}
-
   const CYAN = 0x003030;
   const PURPLE = 0x300030;
 
@@ -341,6 +363,9 @@ export async function driveArc(
       break;
     }
 
+    const currentAngle = angleState.angleZ;
+    const gyroFinished = targetAngle > 0 ? (currentAngle >= targetAbs) : (currentAngle <= targetAbs);
+
     const currentLeft = robutek.leftMotor.getPosition();
     const currentRight = robutek.rightMotor.getPosition();
     const traveledLeft = Math.abs(currentLeft - startLeft);
@@ -349,9 +374,10 @@ export async function driveArc(
     // Řídíme se vnějším (vzdálenějším) kolem, které má delší dráhu a vyšší přesnost
     const outerTarget = Math.max(leftDistTarget, rightDistTarget);
     const outerTraveled = targetAngle > 0 ? traveledRight : traveledLeft;
+    const encoderFinished = (outerTraveled >= outerTarget);
 
-    if (outerTraveled >= outerTarget) {
-      console.log(`Oblouk podle enkodéru dokončen. Ujeto L: ${traveledLeft.toFixed(0)} mm (cíl ${leftDistTarget.toFixed(0)}), R: ${traveledRight.toFixed(0)} mm (cíl ${rightDistTarget.toFixed(0)})`);
+    if (gyroFinished || encoderFinished) {
+      console.log(`Oblouk dokončen. Gyro: ${currentAngle.toFixed(1)}°/${targetAbs.toFixed(1)}° (${gyroFinished ? 'ANO' : 'NE'}), Enkodér: ${outerTraveled.toFixed(0)}/${outerTarget.toFixed(0)} mm (${encoderFinished ? 'ANO' : 'NE'})`);
       break;
     }
 

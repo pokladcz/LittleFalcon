@@ -45,6 +45,13 @@ async function stopRobot() {
 function setServoAngle(angle) {
     servo.write(Math.round((angle / 180) * 1023));
 }
+function setAllLeds(color) {
+    leds.clear();
+    for (let i = 0; i < LED_COUNT; i++) {
+        leds.set(i, color);
+    }
+    leds.show();
+}
 // Nouzový stop mechanismus
 let emergencyLatched = false;
 async function emergencyStop() {
